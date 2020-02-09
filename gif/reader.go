@@ -10,11 +10,13 @@ package gif
 import (
 	"bufio"
 	"compress/lzw"
+	"context"
 	"errors"
 	"fmt"
+	"io"
+
 	"github.com/drswork/image"
 	"github.com/drswork/image/color"
-	"io"
 )
 
 var (
@@ -107,6 +109,9 @@ type decoder struct {
 	disposal []byte
 	image    []*image.Paletted
 	tmp      [1024]byte // must be at least 768 so we can read color table
+
+	// Metadata
+	metadata *Metadata
 }
 
 // blockReader parses the block structure of GIF image data, which comprises
@@ -216,7 +221,7 @@ func (b *blockReader) close() error {
 }
 
 // decode reads a GIF image from r and stores the result in d.
-func (d *decoder) decode(r io.Reader, configOnly, keepAllFrames bool) error {
+func (d *decoder) decode(ctx context.Context, r io.Reader, configOnly, keepAllFrames, decodeImage, decodeMetadata bool) error {
 	// Add buffering if r does not provide ReadByte.
 	if rr, ok := r.(reader); ok {
 		d.r = rr
@@ -559,18 +564,92 @@ func uninterlace(m *image.Paletted) {
 type ReadOption struct {
 }
 
-func DecodeExtended(r io.Reader, options ...*ReadOption) (image.Image, image.Metadata, error) {
-	panic("Not implemented")
+func DecodeExtended(ctx context.Context, r io.Reader, opts ...image.ReadOption) (image.Image, image.Metadata, image.Config, error) {
+	if len(opts) > 1 {
+		return nil, nil, image.Config{}, errors.New("Too many read options provided")
+	}
+	opt := image.DataDecodeOptions{}
+	if len(opts) == 1 {
+		o, ok := opts[0].(image.DataDecodeOptions)
+		if !ok {
+			return nil, nil, image.Config{}, errors.New("Unknown read option type provided")
+		}
+		opt = o
+	}
+
+	// If they ask for nothing then return nothing. This is currently
+	// not an error.
+	if opt.DecodeImage == image.DiscardData && opt.DecodeMetadata == image.DiscardData && opt.DecodeConfig == image.DiscardData {
+		return nil, nil, image.Config{}, nil
+	}
+
+	if opt.DecodeImage == image.DeferData {
+		return nil, nil, image.Config{}, errors.New("Image parsing may not be deferred")
+	}
+	if opt.DecodeConfig == image.DeferData {
+		return nil, nil, image.Config{}, errors.New("Config parsing may not be deferred")
+	}
+
+	if opt.DecodeConfig == image.DefaultDecodeOption {
+		opt.DecodeConfig = image.DiscardData
+	}
+	if opt.DecodeImage == image.DefaultDecodeOption {
+		opt.DecodeImage = image.DecodeData
+	}
+	if opt.DecodeMetadata == image.DefaultDecodeOption {
+		opt.DecodeMetadata = image.DeferData
+	}
+
+	parseImage := false
+	parseMetadata := true
+	if opt.DecodeImage == image.DecodeData {
+		parseImage = true
+	}
+	if opt.DecodeMetadata >= image.DeferData {
+		parseMetadata = true
+	}
+
+	var d decoder
+	if opt.DecodeMetadata >= image.DeferData || true {
+		d.metadata = &Metadata{}
+	}
+
+	if err := d.decode(ctx, r, false, false, parseImage, parseMetadata); err != nil {
+		return nil, nil, image.Config{}, err
+	}
+
+	c := image.Config{}
+	if opt.DecodeConfig == image.DecodeData {
+		c = image.Config{
+			ColorModel: d.globalColorTable,
+			Width:      d.width,
+			Height:     d.height,
+		}
+
+	}
+
+	// We read in all the metadata without decoding the expensive
+	// stuff. If the user wanted it decoded now then go decode it.
+	if opt.DecodeMetadata == image.DecodeData {
+		_, err := d.metadata.XMP(ctx, opts...)
+		if err != nil {
+			return nil, nil, image.Config{}, err
+		}
+	}
+
+	return d.image[0], d.metadata, c, nil
 }
 
 // Decode reads a GIF image from r and returns the first embedded
 // image as an image.Image.
 func Decode(r io.Reader) (image.Image, error) {
-	var d decoder
-	if err := d.decode(r, false, false); err != nil {
-		return nil, err
-	}
-	return d.image[0], nil
+	i, _, _, err := DecodeExtended(context.TODO(), r, image.DataDecodeOptions{
+		DecodeImage:    image.DecodeData,
+		DecodeMetadata: image.DiscardData,
+		DecodeConfig:   image.DiscardData,
+	})
+	return i, err
+
 }
 
 // GIF represents the possibly multiple images stored in a GIF file.
@@ -607,7 +686,7 @@ type GIF struct {
 // and timing information.
 func DecodeAll(r io.Reader) (*GIF, error) {
 	var d decoder
-	if err := d.decode(r, false, true); err != nil {
+	if err := d.decode(context.TODO(), r, false, true, true, false); err != nil {
 		return nil, err
 	}
 	gif := &GIF{
@@ -628,17 +707,15 @@ func DecodeAll(r io.Reader) (*GIF, error) {
 // DecodeConfig returns the global color model and dimensions of a GIF image
 // without decoding the entire image.
 func DecodeConfig(r io.Reader) (image.Config, error) {
-	var d decoder
-	if err := d.decode(r, true, false); err != nil {
-		return image.Config{}, err
-	}
-	return image.Config{
-		ColorModel: d.globalColorTable,
-		Width:      d.width,
-		Height:     d.height,
-	}, nil
+	_, _, c, err := DecodeExtended(context.TODO(), r, image.DataDecodeOptions{
+		DecodeImage:    image.DiscardData,
+		DecodeMetadata: image.DiscardData,
+		DecodeConfig:   image.DecodeData,
+	})
+	return c, err
+
 }
 
 func init() {
-	image.RegisterFormat("gif", "GIF8?a", Decode, DecodeConfig)
+	image.RegisterFormatExtended("gif", "GIF8?a", DecodeExtended)
 }

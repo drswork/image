@@ -304,7 +304,7 @@ func (d Dimension) String() string {
 	case 1:
 		return fmt.Sprintf("%v x %v pixels per meter", d.X, d.Y)
 	default:
-		return fmt.Sprintf("%v x %v pixels, unknown units")
+		return fmt.Sprintf("%v x %v pixels, unknown units", d.X, d.Y)
 	}
 }
 

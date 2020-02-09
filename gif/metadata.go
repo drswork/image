@@ -2,6 +2,7 @@ package gif
 
 import (
 	"context"
+
 	"github.com/drswork/image"
 	"github.com/drswork/image/metadata"
 )
@@ -19,6 +20,10 @@ type Metadata struct {
 	// Deferred and the metadata hasn't been accessed. Decoding the
 	// metadata will clear this cache.
 	rawXmp []byte
+	// Comments holds the contents of any comment extension blocks.
+	Comments []string
+	// Text holds the contents of any text extension blocks.
+	Text []string
 }
 
 // ImageMetadataFormat returns the image type for this metadata.

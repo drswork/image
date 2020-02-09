@@ -1,0 +1,16 @@
+package metadata
+
+type Png struct {
+}
+
+type Exif struct {
+}
+
+type Xmp struct {
+}
+
+type Jpeg struct {
+}
+
+type Gif struct {
+}

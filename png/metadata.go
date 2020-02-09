@@ -188,6 +188,7 @@ const (
 	EtUtext
 )
 
+// String generates a human readable version of the text entry storage type.
 func (t TextType) String() string {
 	switch t {
 	case EtText:
@@ -211,6 +212,7 @@ type TextEntry struct {
 	EntryType TextType
 }
 
+// String generates a human readable version of a text entry.
 func (e TextEntry) String() string {
 	return fmt.Sprintf("key: %q, type %v, value %q", e.Key, e.EntryType, e.Value)
 }
@@ -238,6 +240,8 @@ type Chroma struct {
 	BlueY  uint32
 }
 
+// SignificantBits contains the number of significant bits for the
+// red, green, blue, grey, and alpha channels in an image.
 type SignificantBits struct {
 	Red   int
 	Green int
@@ -246,8 +250,17 @@ type SignificantBits struct {
 	Alpha int
 }
 
+// SRGBIntent is the rendering intent as defined by the ICC.
 type SRGBIntent int
 
+const (
+	SIPerceptual SRGBIntent = iota
+	SIRelativeColorimetric
+	SISaturation
+	SIAbsoluteColorimetric
+)
+
+// String generates a human readable version of the SRGBIntent data.
 func (s SRGBIntent) String() string {
 	switch s {
 	case 0:
@@ -263,6 +276,8 @@ func (s SRGBIntent) String() string {
 	}
 }
 
+// Background holds the background color for an image. Not all fields
+// are relevant for an image.
 type Background struct {
 	Grey         int
 	Red          int
@@ -271,6 +286,8 @@ type Background struct {
 	PaletteIndex int
 }
 
+// String generates a human readable version of the background color
+// specifier.
 func (b Background) String() string {
 	return fmt.Sprintf("Grey %v, RGB %v/%v/%v, PaletteIndex %v", b.Grey, b.Red, b.Green, b.Blue, b.PaletteIndex)
 }
@@ -281,6 +298,7 @@ type Dimension struct {
 	Unit int
 }
 
+// String generates a human readable version of the Dimension data.
 func (d Dimension) String() string {
 	switch d.Unit {
 	case 1:

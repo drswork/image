@@ -59,13 +59,13 @@ type Metadata struct {
 
 	// LastModified holds the modification timestamp embedded in the PNG
 	// image.
-	LastModified time.Time
+	LastModified *time.Time
 	// Chroma holds the decoded chroma information for the PNG file
 	Chroma *Chroma
 	// Gamma holds the decoded gamma data for the PNG file
 	Gamma *uint32
 	// SRGBIntent holds the SRGB rendering intent for the PNG file
-	SRGBIntent *int
+	SRGBIntent *SRGBIntent
 	// SignificantBits holds the decoded significant bit data from the
 	// sBIT chunk of the PNG file.
 	SignificantBits *SignificantBits
@@ -227,6 +227,23 @@ type SignificantBits struct {
 	Alpha int
 }
 
+type SRGBIntent int
+
+func (s SRGBIntent) String() string {
+	switch s {
+	case 0:
+		return "Perceptual"
+	case 1:
+		return "Relative colorimetric"
+	case 2:
+		return "Saturation"
+	case 3:
+		return "Absolute colorimetric"
+	default:
+		return "Unknown"
+	}
+}
+
 type Background struct {
 	Grey         int
 	Red          int
@@ -235,10 +252,23 @@ type Background struct {
 	PaletteIndex int
 }
 
+func (b Background) String() string {
+	return fmt.Sprintf("Grey %v, RGB %v/%v/%v, PaletteIndex %v", b.Grey, b.Red, b.Green, b.Blue, b.PaletteIndex)
+}
+
 type Dimension struct {
 	X    int
 	Y    int
 	Unit int
+}
+
+func (d Dimension) String() string {
+	switch d.Unit {
+	case 1:
+		return fmt.Sprintf("%v x %v pixels per meter", d.X, d.Y)
+	default:
+		return fmt.Sprintf("%v x %v pixels, unknown units")
+	}
 }
 
 func (d *decoder) parseTEXT(length uint32) error {
@@ -308,7 +338,8 @@ func (d *decoder) parseTIME(length uint32) error {
 	minute := int(d.tmp[5])
 	sec := int(d.tmp[6])
 
-	d.metadata.LastModified = time.Date(year, time.Month(month), day, hour, minute, sec, 0, time.UTC)
+	lt := time.Date(year, time.Month(month), day, hour, minute, sec, 0, time.UTC)
+	d.metadata.LastModified = &lt
 	return d.verifyChecksum()
 }
 
@@ -372,7 +403,7 @@ func (d *decoder) parseSRGB(length uint32) error {
 	}
 	d.crc.Write(d.tmp[:1])
 
-	v := int(d.tmp[0])
+	v := SRGBIntent(d.tmp[0])
 	d.metadata.SRGBIntent = &v
 
 	return d.verifyChecksum()

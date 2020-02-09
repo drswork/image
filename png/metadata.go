@@ -177,14 +177,29 @@ func (m *Metadata) SetIcc(i *metadata.ICC) {
 	m.rawIcc = nil
 }
 
+type TextType int
+
 const (
 	// EtText indicates an uncompressed 7-bit ascii text entry
-	EtText = iota
+	EtText TextType = iota
 	// EtZtext indicates a compressed 7-bit ascii text entry
 	EtZtext
 	// EtUtext indicates a compressed unicode text entry
 	EtUtext
 )
+
+func (t TextType) String() string {
+	switch t {
+	case EtText:
+		return "text"
+	case EtZtext:
+		return "compressed text"
+	case EtUtext:
+		return "unicode text"
+	default:
+		return "unknown text type"
+	}
+}
 
 // TextEntry holds a single entry from a PNG file's key/value data store.
 type TextEntry struct {
@@ -193,7 +208,11 @@ type TextEntry struct {
 	// The uncompressed value for the entry
 	Value string
 	// An indicator of how the data was, or should be, stored in the PNG file
-	EntryType int
+	EntryType TextType
+}
+
+func (e TextEntry) String() string {
+	return fmt.Sprintf("key: %q, type %v, value %q", e.Key, e.EntryType, e.Value)
 }
 
 const (

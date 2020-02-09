@@ -68,6 +68,15 @@ func main() {
 		if pm.Dimension != nil {
 			fmt.Printf("Dimension: %v\n", *pm.Dimension)
 		}
+		if pm.Histogram != nil && len(pm.Histogram) != 0 {
+			fmt.Printf("Histogram: %v\n", pm.Histogram)
+		}
+		if pm.Text != nil && len(pm.Text) != 0 {
+			fmt.Printf("Text entries:\n")
+			for _, e := range pm.Text {
+				fmt.Printf("  %v\n", e)
+			}
+		}
 	case "jpeg":
 	default:
 		log.Fatalf("unknown image type %v", t)

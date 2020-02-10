@@ -315,7 +315,7 @@ func (d *decoder) readExtension() error {
 	case eGraphicControl:
 		return d.readGraphicControl()
 	case eComment:
-		// nothing to do but read the data.
+		return d.readComment()
 	case eApplication:
 		b, err := readByte(d.r)
 		if err != nil {

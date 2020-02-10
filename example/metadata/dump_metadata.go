@@ -10,6 +10,7 @@ import (
 	"os"
 
 	"github.com/drswork/image"
+	"github.com/drswork/image/gif"
 	"github.com/drswork/image/png"
 )
 
@@ -35,6 +36,16 @@ func main() {
 
 	switch t {
 	case "gif":
+		gm, ok := m.(*gif.Metadata)
+		if !ok {
+			log.Fatalf("Image metadata should be for gif, instead was %t", m)
+		}
+		if gm.Comments != nil && len(gm.Comments) > 0 {
+			fmt.Printf("GIF comments:\n")
+			for _, c := range gm.Comments {
+				fmt.Printf("  %q\n", c)
+			}
+		}
 	case "png":
 		pm, ok := m.(*png.Metadata)
 		if !ok {

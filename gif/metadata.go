@@ -63,3 +63,20 @@ func (m *Metadata) SetXMP(x *metadata.XMP) {
 	m.xmpDecodeErr = nil
 	m.rawXmp = nil
 }
+
+// readComment reads a comment from the image and saves it.
+func (d *decoder) readComment() error {
+	c := []byte{}
+
+	for {
+		n, err := d.readBlock()
+		if err != nil {
+			return err
+		}
+
+		c = append(c, d.tmp[:n]...)
+	}
+
+	d.metadata.Comments = append(d.metadata.Comments, string(c))
+	return nil
+}

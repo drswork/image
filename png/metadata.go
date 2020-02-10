@@ -330,11 +330,11 @@ func (d *decoder) parseTEXT(length uint32) error {
 
 func (d *decoder) parseZTXT(length uint32) error {
 	log.Printf("length is %v", length)
-	if _, err := io.ReadFull(d.r, d.tmp[:length]); err != nil {
+	tb, err := readData(d, length)
+	if err != nil {
 		return err
 	}
-	d.crc.Write(d.tmp[:length])
-	key, val, err := decodeKeyValComp(d.tmp[:length])
+	key, val, err := decodeKeyValComp(tb)
 	if err != nil {
 		return err
 	}
@@ -346,11 +346,12 @@ func (d *decoder) parseZTXT(length uint32) error {
 
 func (d *decoder) parseITXT(length uint32) error {
 	log.Printf("length is %v", length)
-	if _, err := io.ReadFull(d.r, d.tmp[:length]); err != nil {
+	tb, err := readData(d, length)
+	if err != nil {
 		return err
 	}
-	d.crc.Write(d.tmp[:length])
-	key, val, err := decodeKeyValComp(d.tmp[:length])
+
+	key, _, _, val, err := decodeItxtEntry(tb)
 	if err != nil {
 		return err
 	}
@@ -560,24 +561,117 @@ func decodeKeyValComp(blob []byte) (string, string, error) {
 		return "", "", FormatError("no text separator found")
 	}
 	key := string(blob[:sep])
-	if blob[sep+1] != 0 {
+	val := ""
+
+	// How is the value stored?
+	switch blob[sep+1] {
+	case 0:
+		// Uncompressed.
+		val = string(blob[sep+2:])
+	case 1:
+		// ZLib compressed
+		r, err := zlib.NewReader(bytes.NewReader(blob[sep+2:]))
+		if err != nil {
+			return "", "", err
+		}
+		defer r.Close()
+		u, err := ioutil.ReadAll(r)
+		if err != nil {
+			return "", "", err
+		}
+		val = string(u)
+	default:
 		return "", "", FormatError(fmt.Sprintf("unknown compression type %v", blob[sep+1]))
 	}
-	// We require a null at the end of the key, but the value might be
-	// empty. It's weird for us to have an empty value in a compressed
-	// text section, but people do weird things.
-	if sep+2 < len(blob) {
-		return key, "", nil
+
+	return key, val, nil
+}
+
+// decodeKeyValComp decodes an itxt entry. This contains a key,
+// language tag, translated keyword, and possibly-compressed value.
+func decodeItxtEntry(blob []byte) (string, string, string, string, error) {
+	sep := bytes.IndexByte(blob, 0)
+	if sep == -1 {
+		return "", "", "", "", FormatError("no text separator found")
+	}
+	if sep > len(blob) {
+		return "", "", "", "", FormatError("text separator off the end of the entry")
+	}
+	key := string(blob[:sep])
+
+	if sep+3 >= len(blob) {
+		return "", "", "", "", FormatError("Invalid text entry body")
 	}
 
-	r, err := zlib.NewReader(bytes.NewReader(blob[sep+2:]))
-	if err != nil {
-		return "", "", err
+	ks := bytes.IndexByte(blob[sep+3:], 0)
+	if ks == -1 {
+		return "", "", "", "", FormatError("No language separator found")
 	}
-	defer r.Close()
-	u, err := ioutil.ReadAll(r)
-	if err != nil {
-		return "", "", err
+	ks += sep + 3
+	if ks+1 >= len(blob) {
+		return "", "", "", "", FormatError("language separator off the end of the entry")
 	}
-	return key, string(u), nil
+
+	ts := bytes.IndexByte(blob[ks+1:], 0)
+	if ts == -1 {
+		return "", "", "", "", FormatError("No translated keyword separator found")
+	}
+	ts += ks + 1
+
+	log.Printf("sep %v, ks %v, ts %v, len %v", sep, ks, ts, len(blob))
+	languageTag := string(blob[sep+3 : ks])
+	translatedKeyword := string(blob[ks+1 : ts])
+	rawValue := []byte{}
+	if ts+1 <= len(blob) {
+		rawValue = blob[ts+1:]
+	}
+	value := ""
+
+	// How is the value stored?
+	switch blob[sep+1] {
+	case 0:
+		log.Printf("Uncompressed")
+		value = string(rawValue)
+	case 1:
+		log.Printf("compressed")
+		if blob[sep+2] != 1 {
+			return "", "", "", "", FormatError(fmt.Sprintf("unknown compression flag %v", blob[sep+2]))
+		}
+		// ZLib compressed
+		r, err := zlib.NewReader(bytes.NewReader(rawValue))
+		if err != nil {
+			return "", "", "", "", err
+		}
+		defer r.Close()
+		u, err := ioutil.ReadAll(r)
+		if err != nil {
+			return "", "", "", "", err
+		}
+		value = string(u)
+	default:
+		return "", "", "", "", FormatError(fmt.Sprintf("unknown compression flag %v", blob[sep+1]))
+	}
+
+	return key, languageTag, translatedKeyword, value, nil
+}
+
+func readData(d *decoder, length uint32) ([]byte, error) {
+	// Do we need to read less data than will fit in our buffer? If so
+	// use the buffer.
+	if length <= uint32(len(d.tmp)) {
+		if _, err := io.ReadFull(d.r, d.tmp[:length]); err != nil {
+			return nil, err
+		}
+		d.crc.Write(d.tmp[:length])
+		return d.tmp[:length], nil
+	}
+
+	// We need more space than our working buffer holds, so allocate a
+	// new temporary buffer.
+	tb := make([]byte, length)
+	if _, err := io.ReadFull(d.r, tb); err != nil {
+		return nil, err
+	}
+	d.crc.Write(tb)
+	return tb, nil
 }

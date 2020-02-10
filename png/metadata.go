@@ -204,12 +204,20 @@ func (t TextType) String() string {
 
 // TextEntry holds a single entry from a PNG file's key/value data store.
 type TextEntry struct {
-	// The key for this text entry
+	// Key is the key for this text entry.
 	Key string
-	// The uncompressed value for the entry
+	// Value holds the value for this text entry.
 	Value string
-	// An indicator of how the data was, or should be, stored in the PNG file
+	// EntryType indicates what kind of entry this is, a regular text
+	// entry, compressed text entry, or unicode-encoded text entry.
 	EntryType TextType
+	// LanguageTag is an RFC-1766 string indicating the language that
+	// the translated key and the text is in. This is only valid for
+	// unicode text entries.
+	LanguageTag string
+	// TranslatedKey is the key, translated into the language specified
+	// by the language tag. This is only valid for unicode text entries.
+	TranslatedKey string
 }
 
 // String generates a human readable version of a text entry.
@@ -323,7 +331,7 @@ func (d *decoder) parseTEXT(length uint32) error {
 	if sep+1 >= int(length) {
 		val = string(d.tmp[sep+1 : length])
 	}
-	d.metadata.Text = append(d.metadata.Text, TextEntry{key, val, EtText})
+	d.metadata.Text = append(d.metadata.Text, TextEntry{key, val, EtText, "", ""})
 
 	return d.verifyChecksum()
 }
@@ -339,7 +347,7 @@ func (d *decoder) parseZTXT(length uint32) error {
 		return err
 	}
 
-	d.metadata.Text = append(d.metadata.Text, TextEntry{key, val, EtZtext})
+	d.metadata.Text = append(d.metadata.Text, TextEntry{key, val, EtZtext, "", ""})
 
 	return d.verifyChecksum()
 }
@@ -351,12 +359,12 @@ func (d *decoder) parseITXT(length uint32) error {
 		return err
 	}
 
-	key, _, _, val, err := decodeItxtEntry(tb)
+	key, lang, transkey, val, err := decodeItxtEntry(tb)
 	if err != nil {
 		return err
 	}
 
-	d.metadata.Text = append(d.metadata.Text, TextEntry{key, val, EtUtext})
+	d.metadata.Text = append(d.metadata.Text, TextEntry{key, val, EtUtext, lang, transkey})
 
 	return d.verifyChecksum()
 }

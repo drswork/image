@@ -317,35 +317,17 @@ func (d *decoder) readExtension() error {
 	case eComment:
 		return d.readComment()
 	case eApplication:
-		b, err := readByte(d.r)
-		if err != nil {
-			return fmt.Errorf("gif: reading extension: %v", err)
-		}
-		// The spec requires size be 11, but Adobe sometimes uses 10.
-		size = int(b)
+		return d.readApplication()
 	default:
 		return fmt.Errorf("gif: unknown extension 0x%.2x", extension)
 	}
+	// We only hit this for extensions of type eText but that's OK.
 	if size > 0 {
 		if err := readFull(d.r, d.tmp[:size]); err != nil {
 			return fmt.Errorf("gif: reading extension: %v", err)
 		}
 	}
 
-	// Application Extension with "NETSCAPE2.0" as string and 1 in data means
-	// this extension defines a loop count.
-	if extension == eApplication && string(d.tmp[:size]) == "NETSCAPE2.0" {
-		n, err := d.readBlock()
-		if err != nil {
-			return fmt.Errorf("gif: reading extension: %v", err)
-		}
-		if n == 0 {
-			return nil
-		}
-		if n == 3 && d.tmp[0] == 1 {
-			d.loopCount = int(d.tmp[1]) | int(d.tmp[2])<<8
-		}
-	}
 	for {
 		n, err := d.readBlock()
 		if err != nil {

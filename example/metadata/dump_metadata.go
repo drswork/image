@@ -46,6 +46,9 @@ func main() {
 				fmt.Printf("  %q\n", c)
 			}
 		}
+		for k := range gm.Extensions {
+			fmt.Printf("extension block %q\n", k)
+		}
 	case "png":
 		pm, ok := m.(*png.Metadata)
 		if !ok {

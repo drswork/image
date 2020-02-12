@@ -8,10 +8,11 @@
 package jpeg
 
 import (
+	"io"
+
 	"github.com/drswork/image"
 	"github.com/drswork/image/color"
 	"github.com/drswork/image/internal/imageutil"
-	"io"
 )
 
 // TODO(nigeltao): fix up the doc comment style so that sentences start with
@@ -485,23 +486,6 @@ func (d *decoder) processDRI(n int) error {
 	return nil
 }
 
-func (d *decoder) processApp0Marker(n int) error {
-	if n < 5 {
-		return d.ignore(n)
-	}
-	if err := d.readFull(d.tmp[:5]); err != nil {
-		return err
-	}
-	n -= 5
-
-	d.jfif = d.tmp[0] == 'J' && d.tmp[1] == 'F' && d.tmp[2] == 'I' && d.tmp[3] == 'F' && d.tmp[4] == '\x00'
-
-	if n > 0 {
-		return d.ignore(n)
-	}
-	return nil
-}
-
 func (d *decoder) processApp14Marker(n int) error {
 	if n < 12 {
 		return d.ignore(n)
@@ -635,7 +619,7 @@ func (d *decoder) decode(r io.Reader, configOnly bool) (image.Image, error) {
 				err = d.processDRI(n)
 			}
 		case app0Marker:
-			err = d.processApp0Marker(n)
+			err = d.processApp0(n)
 		case app14Marker:
 			err = d.processApp14Marker(n)
 		default:

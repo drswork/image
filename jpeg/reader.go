@@ -8,6 +8,8 @@
 package jpeg
 
 import (
+	"context"
+	"errors"
 	"io"
 
 	"github.com/drswork/image"
@@ -149,6 +151,8 @@ type decoder struct {
 	huff       [maxTc + 1][maxTh + 1]huffman
 	quant      [maxTq + 1]block // Quantization tables, in zig-zag order.
 	tmp        [2 * blockSize]byte
+
+	metadata *Metadata
 }
 
 // fill fills up the d.bytes.buf buffer from the underlying io.Reader. It
@@ -507,7 +511,7 @@ func (d *decoder) processApp14Marker(n int) error {
 }
 
 // decode reads a JPEG image from r and returns it as an image.Image.
-func (d *decoder) decode(r io.Reader, configOnly bool) (image.Image, error) {
+func (d *decoder) decode(ctx context.Context, r io.Reader, decodeImage, decodeMetdata, decodeConfig bool) (image.Image, error) {
 	d.r = r
 
 	// Check for the Start Of Image marker.
@@ -592,32 +596,32 @@ func (d *decoder) decode(r io.Reader, configOnly bool) (image.Image, error) {
 			d.baseline = marker == sof0Marker
 			d.progressive = marker == sof2Marker
 			err = d.processSOF(n)
-			if configOnly && d.jfif {
-				return nil, err
-			}
+			//			if configOnly && d.jfif {
+			//			return nil, err
+			//	}
 		case dhtMarker:
-			if configOnly {
-				err = d.ignore(n)
-			} else {
-				err = d.processDHT(n)
-			}
+			// if configOnly {
+			// 	err = d.ignore(n)
+			// } else {
+			err = d.processDHT(n)
+			// }
 		case dqtMarker:
-			if configOnly {
-				err = d.ignore(n)
-			} else {
-				err = d.processDQT(n)
-			}
+			// if configOnly {
+			// 	err = d.ignore(n)
+			// } else {
+			err = d.processDQT(n)
+			// }
 		case sosMarker:
-			if configOnly {
-				return nil, nil
-			}
+			// if configOnly {
+			// 	return nil, nil
+			// }
 			err = d.processSOS(n)
 		case driMarker:
-			if configOnly {
-				err = d.ignore(n)
-			} else {
-				err = d.processDRI(n)
-			}
+			// if configOnly {
+			// 	err = d.ignore(n)
+			// } else {
+			err = d.processDRI(n)
+			// }
 		case app0Marker:
 			err = d.processApp0(n)
 		case app14Marker:
@@ -757,50 +761,131 @@ func (d *decoder) convertToRGB() (image.Image, error) {
 	return img, nil
 }
 
-func DecodeExtended(r io.Reader, o ...image.ReadOption) (image.Image, image.Metadata, image.Config, error) {
-	panic("Unimplemented")
-}
-
-// Decode reads a JPEG image from r and returns it as an image.Image.
-func Decode(r io.Reader) (image.Image, error) {
-	var d decoder
-	return d.decode(r, false)
-}
-
-// DecodeConfig returns the color model and dimensions of a JPEG image without
-// decoding the entire image.
-func DecodeConfig(r io.Reader) (image.Config, error) {
-	var d decoder
-	if _, err := d.decode(r, true); err != nil {
-		return image.Config{}, err
+func DecodeExtended(ctx context.Context, r io.Reader, opts ...image.ReadOption) (image.Image, image.Metadata, image.Config, error) {
+	if len(opts) > 1 {
+		return nil, nil, image.Config{}, errors.New("Too many read options provided")
 	}
+	opt := image.DataDecodeOptions{}
+	if len(opts) == 1 {
+		o, ok := opts[0].(image.DataDecodeOptions)
+		if !ok {
+			return nil, nil, image.Config{}, errors.New("Unknown read option type provided")
+		}
+		opt = o
+	}
+
+	// If they ask for nothing then return nothing. This is currently
+	// not an error.
+	if opt.DecodeImage == image.DiscardData && opt.DecodeMetadata == image.DiscardData && opt.DecodeConfig == image.DiscardData {
+		return nil, nil, image.Config{}, nil
+	}
+
+	if opt.DecodeImage == image.DeferData {
+		return nil, nil, image.Config{}, errors.New("Image parsing may not be deferred")
+	}
+	if opt.DecodeConfig == image.DeferData {
+		return nil, nil, image.Config{}, errors.New("Config parsing may not be deferred")
+	}
+
+	if opt.DecodeConfig == image.DefaultDecodeOption {
+		opt.DecodeConfig = image.DiscardData
+	}
+	if opt.DecodeImage == image.DefaultDecodeOption {
+		opt.DecodeImage = image.DecodeData
+	}
+	if opt.DecodeMetadata == image.DefaultDecodeOption {
+		opt.DecodeMetadata = image.DeferData
+	}
+
+	parseImage := false
+	parseMetadata := true
+	parseConfig := false
+	if opt.DecodeImage == image.DecodeData {
+		parseImage = true
+	}
+	if opt.DecodeMetadata >= image.DeferData {
+		parseMetadata = true
+	}
+	if opt.DecodeConfig >= image.DecodeData {
+		parseConfig = true
+	}
+
+	var d decoder
+	if opt.DecodeMetadata >= image.DeferData || true {
+		d.metadata = &Metadata{}
+	}
+
+	img, err := d.decode(ctx, r, parseImage, parseMetadata, parseConfig)
+	if err != nil {
+		return nil, nil, image.Config{}, err
+	}
+
+	var c image.Config
 	switch d.nComp {
 	case 1:
-		return image.Config{
+		c = image.Config{
 			ColorModel: color.GrayModel,
 			Width:      d.width,
 			Height:     d.height,
-		}, nil
+		}
 	case 3:
 		cm := color.YCbCrModel
 		if d.isRGB() {
 			cm = color.RGBAModel
 		}
-		return image.Config{
+		c = image.Config{
 			ColorModel: cm,
 			Width:      d.width,
 			Height:     d.height,
-		}, nil
+		}
 	case 4:
-		return image.Config{
+		c = image.Config{
 			ColorModel: color.CMYKModel,
 			Width:      d.width,
 			Height:     d.height,
-		}, nil
+		}
 	}
-	return image.Config{}, FormatError("missing SOF marker")
+
+	if opt.DecodeMetadata == image.DecodeData {
+		_, err := d.metadata.EXIF(ctx, opts...)
+		if err != nil {
+			return nil, nil, image.Config{}, err
+		}
+		_, err = d.metadata.XMP(ctx, opts...)
+		if err != nil {
+			return nil, nil, image.Config{}, err
+		}
+		_, err = d.metadata.ICC(ctx, opts...)
+		if err != nil {
+			return nil, nil, image.Config{}, err
+		}
+	}
+	return img, d.metadata, c, nil
+}
+
+// Decode reads a jpeg image from r.
+func Decode(r io.Reader) (image.Image, error) {
+	i, _, _, err := DecodeExtended(context.TODO(), r, image.DataDecodeOptions{
+		DecodeImage:    image.DecodeData,
+		DecodeMetadata: image.DiscardData,
+		DecodeConfig:   image.DiscardData,
+	})
+	return i, err
+
+}
+
+// DecodeConfig returns the global color model and dimensions of a JPEG image
+// without decoding the entire image.
+func DecodeConfig(r io.Reader) (image.Config, error) {
+	_, _, c, err := DecodeExtended(context.TODO(), r, image.DataDecodeOptions{
+		DecodeImage:    image.DiscardData,
+		DecodeMetadata: image.DiscardData,
+		DecodeConfig:   image.DecodeData,
+	})
+	return c, err
+
 }
 
 func init() {
-	image.RegisterFormat("jpeg", "\xff\xd8", Decode, DecodeConfig)
+	image.RegisterFormatExtended("jpeg", "\xff\xd8", DecodeExtended)
 }

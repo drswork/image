@@ -316,7 +316,7 @@ func (d Dimension) String() string {
 	}
 }
 
-func (d *decoder) parseTEXT(length uint32) error {
+func (d *decoder) parseTEXT(ctx context.Context, length uint32) error {
 	if _, err := io.ReadFull(d.r, d.tmp[:length]); err != nil {
 		return err
 	}
@@ -336,13 +336,13 @@ func (d *decoder) parseTEXT(length uint32) error {
 	return d.verifyChecksum()
 }
 
-func (d *decoder) parseZTXT(length uint32) error {
+func (d *decoder) parseZTXT(ctx context.Context, length uint32) error {
 	log.Printf("length is %v", length)
-	tb, err := readData(d, length)
+	tb, err := readData(ctx, d, length)
 	if err != nil {
 		return err
 	}
-	key, val, err := decodeKeyValComp(tb)
+	key, val, err := decodeKeyValComp(ctx, tb)
 	if err != nil {
 		return err
 	}
@@ -352,14 +352,14 @@ func (d *decoder) parseZTXT(length uint32) error {
 	return d.verifyChecksum()
 }
 
-func (d *decoder) parseITXT(length uint32) error {
+func (d *decoder) parseITXT(ctx context.Context, length uint32) error {
 	log.Printf("length is %v", length)
-	tb, err := readData(d, length)
+	tb, err := readData(ctx, d, length)
 	if err != nil {
 		return err
 	}
 
-	key, lang, transkey, val, err := decodeItxtEntry(tb)
+	key, lang, transkey, val, err := decodeItxtEntry(ctx, tb)
 	if err != nil {
 		return err
 	}
@@ -369,7 +369,7 @@ func (d *decoder) parseITXT(length uint32) error {
 	return d.verifyChecksum()
 }
 
-func (d *decoder) parseTIME(length uint32) error {
+func (d *decoder) parseTIME(ctx context.Context, length uint32) error {
 	if length != 7 {
 		return FormatError("bad tIME length")
 	}
@@ -389,7 +389,7 @@ func (d *decoder) parseTIME(length uint32) error {
 	return d.verifyChecksum()
 }
 
-func (d *decoder) parseCHRM(length uint32) error {
+func (d *decoder) parseCHRM(ctx context.Context, length uint32) error {
 	if length != 32 {
 		return FormatError("bad cHRM length")
 	}
@@ -411,7 +411,7 @@ func (d *decoder) parseCHRM(length uint32) error {
 	return d.verifyChecksum()
 }
 
-func (d *decoder) parseGAMA(length uint32) error {
+func (d *decoder) parseGAMA(ctx context.Context, length uint32) error {
 	if length != 4 {
 		return FormatError("bad gAMA length")
 	}
@@ -424,12 +424,12 @@ func (d *decoder) parseGAMA(length uint32) error {
 	return d.verifyChecksum()
 }
 
-func (d *decoder) parseICCP(length uint32) error {
+func (d *decoder) parseICCP(ctx context.Context, length uint32) error {
 	if _, err := io.ReadFull(d.r, d.tmp[:length]); err != nil {
 		return err
 	}
 	d.crc.Write(d.tmp[:length])
-	pname, profile, err := decodeKeyValComp(d.tmp[:length])
+	pname, profile, err := decodeKeyValComp(ctx, d.tmp[:length])
 	if err != nil {
 		return err
 	}
@@ -440,7 +440,7 @@ func (d *decoder) parseICCP(length uint32) error {
 	return d.verifyChecksum()
 }
 
-func (d *decoder) parseSRGB(length uint32) error {
+func (d *decoder) parseSRGB(ctx context.Context, length uint32) error {
 	if length != 1 {
 		return FormatError("invalid sRGB length")
 	}
@@ -455,7 +455,7 @@ func (d *decoder) parseSRGB(length uint32) error {
 	return d.verifyChecksum()
 }
 
-func (d *decoder) parseSBIT(length uint32) error {
+func (d *decoder) parseSBIT(ctx context.Context, length uint32) error {
 	if _, err := io.ReadFull(d.r, d.tmp[:length]); err != nil {
 		return err
 	}
@@ -496,7 +496,7 @@ func (d *decoder) parseSBIT(length uint32) error {
 	return d.verifyChecksum()
 }
 
-func (d *decoder) parseBKGD(length uint32) error {
+func (d *decoder) parseBKGD(ctx context.Context, length uint32) error {
 	if _, err := io.ReadFull(d.r, d.tmp[:length]); err != nil {
 		return err
 	}
@@ -528,7 +528,7 @@ func (d *decoder) parseBKGD(length uint32) error {
 
 }
 
-func (d *decoder) parsePHYS(length uint32) error {
+func (d *decoder) parsePHYS(ctx context.Context, length uint32) error {
 	if length != 9 {
 		return FormatError("invalid pHYs length")
 	}
@@ -545,7 +545,7 @@ func (d *decoder) parsePHYS(length uint32) error {
 	return d.verifyChecksum()
 }
 
-func (d *decoder) parseHIST(length uint32) error {
+func (d *decoder) parseHIST(ctx context.Context, length uint32) error {
 	if int(length) != d.paletteCount {
 		return FormatError("invalid hIST length")
 	}
@@ -563,7 +563,7 @@ func (d *decoder) parseHIST(length uint32) error {
 }
 
 // decodeKeyValComp decodes a key/value pair where the value is compressed.
-func decodeKeyValComp(blob []byte) (string, string, error) {
+func decodeKeyValComp(ctx context.Context, blob []byte) (string, string, error) {
 	sep := bytes.IndexByte(blob, 0)
 	if sep == -1 {
 		return "", "", FormatError("no text separator found")
@@ -597,7 +597,7 @@ func decodeKeyValComp(blob []byte) (string, string, error) {
 
 // decodeKeyValComp decodes an itxt entry. This contains a key,
 // language tag, translated keyword, and possibly-compressed value.
-func decodeItxtEntry(blob []byte) (string, string, string, string, error) {
+func decodeItxtEntry(ctx context.Context, blob []byte) (string, string, string, string, error) {
 	sep := bytes.IndexByte(blob, 0)
 	if sep == -1 {
 		return "", "", "", "", FormatError("no text separator found")
@@ -663,7 +663,7 @@ func decodeItxtEntry(blob []byte) (string, string, string, string, error) {
 	return key, languageTag, translatedKeyword, value, nil
 }
 
-func readData(d *decoder, length uint32) ([]byte, error) {
+func readData(ctx context.Context, d *decoder, length uint32) ([]byte, error) {
 	// Do we need to read less data than will fit in our buffer? If so
 	// use the buffer.
 	if length <= uint32(len(d.tmp)) {

@@ -9,14 +9,15 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"github.com/drswork/image"
-	"github.com/drswork/image/color"
 	"io"
 	"io/ioutil"
 	"os"
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/drswork/image"
+	"github.com/drswork/image/color"
 )
 
 var filenames = []string{
@@ -71,13 +72,14 @@ var filenamesShort = []string{
 	"basn6a16",
 }
 
-func readPNG(filename string) (image.Image, error) {
+func readPNG(ctx context.Context, filename string) (image.Image, error) {
 	f, err := os.Open(filename)
 	if err != nil {
 		return nil, err
 	}
 	defer f.Close()
-	return Decode(f)
+	img, _, _, err := DecodeExtended(ctx, f)
+	return img, err
 }
 
 // fakebKGDs maps from filenames to fake bKGD chunks for our approximation to
@@ -336,7 +338,7 @@ func TestReader(t *testing.T) {
 	}
 	for _, fn := range names {
 		// Read the .png file.
-		img, err := readPNG("testdata/pngsuite/" + fn + ".png")
+		img, err := readPNG(context.TODO(), "testdata/pngsuite/"+fn+".png")
 		if err != nil {
 			t.Error(fn, err)
 			continue
@@ -420,7 +422,7 @@ var readerErrors = []struct {
 
 func TestReaderError(t *testing.T) {
 	for _, tt := range readerErrors {
-		img, err := readPNG("testdata/" + tt.file)
+		img, err := readPNG(context.TODO(), "testdata/"+tt.file)
 		if err == nil {
 			t.Errorf("decoding %s: missing error", tt.file)
 			continue
@@ -463,12 +465,21 @@ func TestPalettedDecodeConfig(t *testing.T) {
 	}
 }
 
+func TestTimeout(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.TODO())
+	cancel()
+	_, err := readPNG(ctx, "testdata/gray-gradient.png")
+	if err == nil {
+		t.Fatalf("timeout failed")
+	}
+}
+
 func TestInterlaced(t *testing.T) {
-	a, err := readPNG("testdata/gray-gradient.png")
+	a, err := readPNG(context.TODO(), "testdata/gray-gradient.png")
 	if err != nil {
 		t.Fatal(err)
 	}
-	b, err := readPNG("testdata/gray-gradient.interlaced.png")
+	b, err := readPNG(context.TODO(), "testdata/gray-gradient.interlaced.png")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -591,7 +602,7 @@ func TestUnknownChunkLengthUnderflow(t *testing.T) {
 
 func TestPaletted8OutOfRangePixel(t *testing.T) {
 	// IDAT contains a reference to a palette index that does not exist in the file.
-	img, err := readPNG("testdata/invalid-palette.png")
+	img, err := readPNG(context.TODO(), "testdata/invalid-palette.png")
 	if err != nil {
 		t.Errorf("decoding invalid-palette.png: unexpected error %v", err)
 		return

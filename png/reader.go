@@ -15,9 +15,10 @@ import (
 	"fmt"
 	"hash"
 	"hash/crc32"
+	"io"
+
 	"github.com/drswork/image"
 	"github.com/drswork/image/color"
-	"io"
 )
 
 // Color type, as per the PNG spec.
@@ -147,7 +148,7 @@ func min(a, b int) int {
 	return b
 }
 
-func (d *decoder) parseIHDR(length uint32) error {
+func (d *decoder) parseIHDR(ctx context.Context, length uint32) error {
 	if length != 13 {
 		return FormatError("bad IHDR length")
 	}
@@ -237,7 +238,7 @@ func (d *decoder) parseIHDR(length uint32) error {
 	return d.verifyChecksum()
 }
 
-func (d *decoder) parsePLTE(length uint32) error {
+func (d *decoder) parsePLTE(ctx context.Context, length uint32) error {
 	np := int(length / 3) // The number of palette entries.
 	if length%3 != 0 || np <= 0 || np > 256 || np > 1<<uint(d.depth) {
 		return FormatError("bad PLTE length")
@@ -271,7 +272,7 @@ func (d *decoder) parsePLTE(length uint32) error {
 	return d.verifyChecksum()
 }
 
-func (d *decoder) parsetRNS(length uint32) error {
+func (d *decoder) parsetRNS(ctx context.Context, length uint32) error {
 	switch d.cb {
 	case cbG1, cbG2, cbG4, cbG8, cbG16:
 		if length != 2 {
@@ -369,7 +370,7 @@ func (d *decoder) Read(p []byte) (int, error) {
 }
 
 // decode decodes the IDAT data into an image.
-func (d *decoder) decode() (image.Image, error) {
+func (d *decoder) decode(ctx context.Context) (image.Image, error) {
 	r, err := zlib.NewReader(d)
 	if err != nil {
 		return nil, err
@@ -849,27 +850,39 @@ func (d *decoder) mergePassInto(dst image.Image, src image.Image, pass int) {
 	}
 }
 
-func (d *decoder) parseIDAT(length uint32) (err error) {
+func (d *decoder) parseIDAT(ctx context.Context, length uint32) (err error) {
 	d.idatLength = length
-	d.img, err = d.decode()
+	d.img, err = d.decode(ctx)
 	if err != nil {
 		return err
 	}
 	return d.verifyChecksum()
 }
 
-func (d *decoder) parseIEND(length uint32) error {
+func (d *decoder) parseIEND(ctx context.Context, length uint32) error {
 	if length != 0 {
 		return FormatError("bad IEND length")
 	}
 	return d.verifyChecksum()
 }
 
-func (d *decoder) parseChunk(did, dmd bool) error {
+func (d *decoder) parseChunk(ctx context.Context, did, dmd bool) error {
+	// Check and see if our context was cancelled.
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	default:
+	}
 	// Read the length and chunk type.
 	_, err := io.ReadFull(d.r, d.tmp[:8])
 	if err != nil {
 		return err
+	}
+	// Check and see if our context was cancelled after we read something.
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	default:
 	}
 	length := binary.BigEndian.Uint32(d.tmp[:4])
 	d.crc.Reset()
@@ -883,13 +896,13 @@ func (d *decoder) parseChunk(did, dmd bool) error {
 			return chunkOrderError
 		}
 		d.stage = dsSeenIHDR
-		return d.parseIHDR(length)
+		return d.parseIHDR(ctx, length)
 	case "PLTE":
 		if d.stage != dsSeenIHDR {
 			return chunkOrderError
 		}
 		d.stage = dsSeenPLTE
-		return d.parsePLTE(length)
+		return d.parsePLTE(ctx, length)
 	case "tRNS":
 		if cbPaletted(d.cb) {
 			if d.stage != dsSeenPLTE {
@@ -899,7 +912,7 @@ func (d *decoder) parseChunk(did, dmd bool) error {
 			return chunkOrderError
 		}
 		d.stage = dsSeentRNS
-		return d.parsetRNS(length)
+		return d.parsetRNS(ctx, length)
 	case "IDAT":
 		if d.stage < dsSeenIHDR || d.stage > dsSeenIDAT || (d.stage == dsSeenIHDR && cbPaletted(d.cb)) {
 			return chunkOrderError
@@ -912,14 +925,14 @@ func (d *decoder) parseChunk(did, dmd bool) error {
 			break
 		}
 		d.stage = dsSeenIDAT
-		return d.parseIDAT(length)
+		return d.parseIDAT(ctx, length)
 	case "IEND":
 		// mandatory
 		if d.stage != dsSeenIDAT {
 			return chunkOrderError
 		}
 		d.stage = dsSeenIEND
-		return d.parseIEND(length)
+		return d.parseIEND(ctx, length)
 	case "iCCP":
 		// metadata
 		if d.seenColorProfile {
@@ -927,77 +940,77 @@ func (d *decoder) parseChunk(did, dmd bool) error {
 		}
 		d.seenColorProfile = true
 		if !dmd {
-			return d.skipChunk(length)
+			return d.skipChunk(ctx, length)
 		}
-		return d.parseICCP(length)
+		return d.parseICCP(ctx, length)
 	case "sRGB":
 		if d.seenColorProfile {
 			return multipleColorProfileError
 		}
 		d.seenColorProfile = true
 		if !dmd {
-			return d.skipChunk(length)
+			return d.skipChunk(ctx, length)
 		}
-		return d.parseSRGB(length)
+		return d.parseSRGB(ctx, length)
 	case "sBIT":
 		if !dmd {
-			return d.skipChunk(length)
+			return d.skipChunk(ctx, length)
 		}
-		return d.parseSBIT(length)
+		return d.parseSBIT(ctx, length)
 	case "gAMA":
 		if !dmd {
-			return d.skipChunk(length)
+			return d.skipChunk(ctx, length)
 		}
-		return d.parseGAMA(length)
+		return d.parseGAMA(ctx, length)
 	case "cHRM":
 		if !dmd {
-			return d.skipChunk(length)
+			return d.skipChunk(ctx, length)
 		}
-		return d.parseCHRM(length)
+		return d.parseCHRM(ctx, length)
 	case "tIME":
 		if !dmd {
-			return d.skipChunk(length)
+			return d.skipChunk(ctx, length)
 		}
-		return d.parseTIME(length)
+		return d.parseTIME(ctx, length)
 	case "tEXt":
 		if !dmd {
-			return d.skipChunk(length)
+			return d.skipChunk(ctx, length)
 		}
-		return d.parseTEXT(length)
+		return d.parseTEXT(ctx, length)
 	case "iTXt":
 		if !dmd {
-			return d.skipChunk(length)
+			return d.skipChunk(ctx, length)
 		}
-		return d.parseITXT(length)
+		return d.parseITXT(ctx, length)
 	case "zTXt":
 		if !dmd {
-			return d.skipChunk(length)
+			return d.skipChunk(ctx, length)
 		}
-		return d.parseZTXT(length)
+		return d.parseZTXT(ctx, length)
 	case "bKGD":
 		if !dmd {
-			return d.skipChunk(length)
+			return d.skipChunk(ctx, length)
 		}
-		return d.parseBKGD(length)
+		return d.parseBKGD(ctx, length)
 	case "pHYs":
 		if !dmd {
-			return d.skipChunk(length)
+			return d.skipChunk(ctx, length)
 		}
-		return d.parsePHYS(length)
+		return d.parsePHYS(ctx, length)
 	case "hIST":
 		if !dmd {
-			return d.skipChunk(length)
+			return d.skipChunk(ctx, length)
 		}
-		return d.parseHIST(length)
+		return d.parseHIST(ctx, length)
 
 	}
 	if length > 0x7fffffff {
 		return FormatError(fmt.Sprintf("Bad chunk length: %d", length))
 	}
-	return d.skipChunk(length)
+	return d.skipChunk(ctx, length)
 }
 
-func (d *decoder) skipChunk(length uint32) error {
+func (d *decoder) skipChunk(ctx context.Context, length uint32) error {
 	// Ignore this chunk (of a known length).
 	var ignored [4096]byte
 	for length > 0 {
@@ -1021,7 +1034,7 @@ func (d *decoder) verifyChecksum() error {
 	return nil
 }
 
-func (d *decoder) checkHeader() error {
+func (d *decoder) checkHeader(ctx context.Context) error {
 	_, err := io.ReadFull(d.r, d.tmp[:len(pngHeader)])
 	if err != nil {
 		return err
@@ -1076,7 +1089,7 @@ func DecodeExtended(ctx context.Context, r io.Reader, opts ...image.ReadOption) 
 		d.metadata = &Metadata{}
 	}
 
-	if err := d.checkHeader(); err != nil {
+	if err := d.checkHeader(ctx); err != nil {
 		if err == io.EOF {
 			err = io.ErrUnexpectedEOF
 		}
@@ -1093,7 +1106,7 @@ func DecodeExtended(ctx context.Context, r io.Reader, opts ...image.ReadOption) 
 	}
 
 	for d.stage != dsSeenIEND {
-		if err := d.parseChunk(parseImage, parseMetadata); err != nil {
+		if err := d.parseChunk(ctx, parseImage, parseMetadata); err != nil {
 			if err == io.EOF {
 				err = io.ErrUnexpectedEOF
 			}

@@ -7,13 +7,15 @@ package png
 import (
 	"bytes"
 	"compress/zlib"
+	"context"
 	"encoding/binary"
 	"fmt"
-	"github.com/drswork/image"
-	"github.com/drswork/image/color"
 	"io"
 	"io/ioutil"
 	"testing"
+
+	"github.com/drswork/image"
+	"github.com/drswork/image/color"
 )
 
 func diff(m0, m1 image.Image) error {
@@ -52,16 +54,17 @@ func TestWriter(t *testing.T) {
 	if testing.Short() {
 		names = filenamesShort
 	}
+	ctx := context.TODO()
 	for _, fn := range names {
 		qfn := "testdata/pngsuite/" + fn + ".png"
 		// Read the image.
-		m0, err := readPNG(qfn)
+		m0, err := readPNG(ctx, qfn)
 		if err != nil {
 			t.Error(fn, err)
 			continue
 		}
 		// Read the image again, encode it, and decode it.
-		m1, err := readPNG(qfn)
+		m1, err := readPNG(ctx, qfn)
 		if err != nil {
 			t.Error(fn, err)
 			continue

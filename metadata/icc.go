@@ -3,6 +3,8 @@ package metadata
 import (
 	"context"
 	"errors"
+	"time"
+
 	"github.com/drswork/image"
 )
 
@@ -18,7 +20,25 @@ func RegisterICCEncoder(e func(context.Context, *ICC, ...image.WriteOption) ([]b
 	iccEncoder = e
 }
 
+// ICC holds an ICC color profile.
 type ICC struct {
+	CMMTypeSignature                 uint32
+	ProfileVersion                   uint32
+	ProfileClassSignature            uint32
+	ColorSpace                       uint32
+	ProfileConnectionSpace           uint32
+	ProfileCreationTime              time.Time
+	PrimaryPlatformSignature         uint32
+	CMMFlags                         uint32
+	DeviceManufacturer               uint32
+	DeviceModel                      uint32
+	DeviceAttributes                 uint32
+	RenderingIntent                  uint32
+	ProfileConnectionSpaceIlluminant XYZNumber
+	ProfileCreatorSignature          uint32
+}
+
+type XYZNumber struct {
 }
 
 func DecodeICC(ctx context.Context, b []byte, opt ...image.ReadOption) (*ICC, error) {

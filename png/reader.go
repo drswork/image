@@ -866,8 +866,8 @@ func (d *decoder) parseIEND(ctx context.Context, length uint32) error {
 	return d.verifyChecksum()
 }
 
-func (d *decoder) parseChunk(ctx context.Context, did, dmd bool) error {
-	// Check and see if our context was cancelled.
+func (d *decoder) parseChunk(ctx context.Context, parseImage, parseMetadata bool) error {
+	// Check and see if our context was cancelled or expired.
 	select {
 	case <-ctx.Done():
 		return ctx.Err()
@@ -878,7 +878,8 @@ func (d *decoder) parseChunk(ctx context.Context, did, dmd bool) error {
 	if err != nil {
 		return err
 	}
-	// Check and see if our context was cancelled after we read something.
+	// Check and see if our context was cancelled after we read
+	// something, in case the read blocked.
 	select {
 	case <-ctx.Done():
 		return ctx.Err()
@@ -925,6 +926,9 @@ func (d *decoder) parseChunk(ctx context.Context, did, dmd bool) error {
 			break
 		}
 		d.stage = dsSeenIDAT
+		if !parseImage {
+			return d.skipChunk(ctx, length)
+		}
 		return d.parseIDAT(ctx, length)
 	case "IEND":
 		// mandatory
@@ -939,7 +943,7 @@ func (d *decoder) parseChunk(ctx context.Context, did, dmd bool) error {
 			return multipleColorProfileError
 		}
 		d.seenColorProfile = true
-		if !dmd {
+		if !parseMetadata {
 			return d.skipChunk(ctx, length)
 		}
 		return d.parseICCP(ctx, length)
@@ -948,57 +952,57 @@ func (d *decoder) parseChunk(ctx context.Context, did, dmd bool) error {
 			return multipleColorProfileError
 		}
 		d.seenColorProfile = true
-		if !dmd {
+		if !parseMetadata {
 			return d.skipChunk(ctx, length)
 		}
 		return d.parseSRGB(ctx, length)
 	case "sBIT":
-		if !dmd {
+		if !parseMetadata {
 			return d.skipChunk(ctx, length)
 		}
 		return d.parseSBIT(ctx, length)
 	case "gAMA":
-		if !dmd {
+		if !parseMetadata {
 			return d.skipChunk(ctx, length)
 		}
 		return d.parseGAMA(ctx, length)
 	case "cHRM":
-		if !dmd {
+		if !parseMetadata {
 			return d.skipChunk(ctx, length)
 		}
 		return d.parseCHRM(ctx, length)
 	case "tIME":
-		if !dmd {
+		if !parseMetadata {
 			return d.skipChunk(ctx, length)
 		}
 		return d.parseTIME(ctx, length)
 	case "tEXt":
-		if !dmd {
+		if !parseMetadata {
 			return d.skipChunk(ctx, length)
 		}
 		return d.parseTEXT(ctx, length)
 	case "iTXt":
-		if !dmd {
+		if !parseMetadata {
 			return d.skipChunk(ctx, length)
 		}
 		return d.parseITXT(ctx, length)
 	case "zTXt":
-		if !dmd {
+		if !parseMetadata {
 			return d.skipChunk(ctx, length)
 		}
 		return d.parseZTXT(ctx, length)
 	case "bKGD":
-		if !dmd {
+		if !parseMetadata {
 			return d.skipChunk(ctx, length)
 		}
 		return d.parseBKGD(ctx, length)
 	case "pHYs":
-		if !dmd {
+		if !parseMetadata {
 			return d.skipChunk(ctx, length)
 		}
 		return d.parsePHYS(ctx, length)
 	case "hIST":
-		if !dmd {
+		if !parseMetadata {
 			return d.skipChunk(ctx, length)
 		}
 		return d.parseHIST(ctx, length)

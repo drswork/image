@@ -474,6 +474,24 @@ func TestTimeout(t *testing.T) {
 	}
 }
 
+func TestSkipImage(t *testing.T) {
+	ctx := context.TODO()
+	filename := "testdata/gray-gradient.png"
+	f, err := os.Open(filename)
+	if err != nil {
+		t.Fatalf("Unable to open test file: %v", filename)
+	}
+	defer f.Close()
+	_, _, _, err = DecodeExtended(ctx, f, image.DataDecodeOptions{
+		DecodeImage:    image.DiscardData,
+		DecodeMetadata: image.DecodeData,
+		DecodeConfig:   image.DiscardData,
+	})
+	if err != nil {
+		t.Fatalf("Image-free decode failed: %v", err)
+	}
+}
+
 func TestInterlaced(t *testing.T) {
 	a, err := readPNG(context.TODO(), "testdata/gray-gradient.png")
 	if err != nil {

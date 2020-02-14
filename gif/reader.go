@@ -65,10 +65,26 @@ const (
 	eApplication    = 0xFF // Application
 )
 
-func readFull(r io.Reader, b []byte) error {
+func readFull(ctx context.Context, r io.Reader, b []byte) error {
+	// Check and see if our context was cancelled or expired.
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	default:
+	}
+	// TODO: Implement our own read loop here rather than relying on the
+	// utility functions in io so we can check for timeouts more
+	// frequently. Hopefully one of these releases the io library will
+	// get context support.
 	_, err := io.ReadFull(r, b)
 	if err == io.EOF {
 		err = io.ErrUnexpectedEOF
+	}
+	// Check and see if our context was cancelled or expired.
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	default:
 	}
 	return err
 }
@@ -128,7 +144,7 @@ type blockReader struct {
 	err  error
 }
 
-func (b *blockReader) fill() {
+func (b *blockReader) fill(ctx context.Context) {
 	if b.err != nil {
 		return
 	}
@@ -141,15 +157,19 @@ func (b *blockReader) fill() {
 	}
 
 	b.i = 0
-	b.err = readFull(b.d.r, b.d.tmp[:b.j])
+	b.err = readFull(ctx, b.d.r, b.d.tmp[:b.j])
 	if b.err != nil {
 		b.j = 0
 	}
 }
 
 func (b *blockReader) ReadByte() (byte, error) {
+	// This is unfortuate, because we can't check for timeouts. It's
+	// unfortunately necessary because blockReader has to conform to an
+	// existing context-less interface.
+	ctx := context.TODO()
 	if b.i == b.j {
-		b.fill()
+		b.fill(ctx)
 		if b.err != nil {
 			return 0, b.err
 		}
@@ -163,11 +183,13 @@ func (b *blockReader) ReadByte() (byte, error) {
 // blockReader must implement io.Reader, but its Read shouldn't ever actually
 // be called in practice. The compress/lzw package will only call ReadByte.
 func (b *blockReader) Read(p []byte) (int, error) {
+	// This is only OK because this function shouldn't be called.
+	ctx := context.TODO()
 	if len(p) == 0 || b.err != nil {
 		return 0, b.err
 	}
 	if b.i == b.j {
-		b.fill()
+		b.fill(ctx)
 		if b.err != nil {
 			return 0, b.err
 		}
@@ -186,7 +208,7 @@ func (b *blockReader) Read(p []byte) (int, error) {
 // most one more sub-block of length 1 may exist before the block-terminator.
 // These accommodations allow us to support GIFs created by less strict encoders.
 // See https://golang.org/issue/16146.
-func (b *blockReader) close() error {
+func (b *blockReader) close(ctx context.Context) error {
 	if b.err == io.EOF {
 		// A clean block-sequence terminator was encountered while reading.
 		return nil
@@ -198,7 +220,7 @@ func (b *blockReader) close() error {
 	if b.i == b.j {
 		// We reached the end of a sub block reading LZW data. We'll allow at
 		// most one more sub block of data with a length of 1 byte.
-		b.fill()
+		b.fill(ctx)
 		if b.err == io.EOF {
 			return nil
 		} else if b.err != nil {
@@ -210,7 +232,7 @@ func (b *blockReader) close() error {
 
 	// Part of a sub-block remains buffered. We expect that the next attempt to
 	// buffer a sub-block will reach the block terminator.
-	b.fill()
+	b.fill(ctx)
 	if b.err == io.EOF {
 		return nil
 	} else if b.err != nil {
@@ -231,7 +253,7 @@ func (d *decoder) decode(ctx context.Context, r io.Reader, configOnly, keepAllFr
 
 	d.loopCount = -1
 
-	err := d.readHeaderAndScreenDescriptor()
+	err := d.readHeaderAndScreenDescriptor(ctx)
 	if err != nil {
 		return err
 	}
@@ -246,12 +268,12 @@ func (d *decoder) decode(ctx context.Context, r io.Reader, configOnly, keepAllFr
 		}
 		switch c {
 		case sExtension:
-			if err = d.readExtension(); err != nil {
+			if err = d.readExtension(ctx); err != nil {
 				return err
 			}
 
 		case sImageDescriptor:
-			if err = d.readImageDescriptor(keepAllFrames); err != nil {
+			if err = d.readImageDescriptor(ctx, keepAllFrames); err != nil {
 				return err
 			}
 
@@ -267,8 +289,8 @@ func (d *decoder) decode(ctx context.Context, r io.Reader, configOnly, keepAllFr
 	}
 }
 
-func (d *decoder) readHeaderAndScreenDescriptor() error {
-	err := readFull(d.r, d.tmp[:13])
+func (d *decoder) readHeaderAndScreenDescriptor(ctx context.Context) error {
+	err := readFull(ctx, d.r, d.tmp[:13])
 	if err != nil {
 		return fmt.Errorf("gif: reading header: %v", err)
 	}
@@ -281,7 +303,7 @@ func (d *decoder) readHeaderAndScreenDescriptor() error {
 	if fields := d.tmp[10]; fields&fColorTable != 0 {
 		d.backgroundIndex = d.tmp[11]
 		// readColorTable overwrites the contents of d.tmp, but that's OK.
-		if d.globalColorTable, err = d.readColorTable(fields); err != nil {
+		if d.globalColorTable, err = d.readColorTable(ctx, fields); err != nil {
 			return err
 		}
 	}
@@ -289,9 +311,9 @@ func (d *decoder) readHeaderAndScreenDescriptor() error {
 	return nil
 }
 
-func (d *decoder) readColorTable(fields byte) (color.Palette, error) {
+func (d *decoder) readColorTable(ctx context.Context, fields byte) (color.Palette, error) {
 	n := 1 << (1 + uint(fields&fColorTableBitsMask))
-	err := readFull(d.r, d.tmp[:3*n])
+	err := readFull(ctx, d.r, d.tmp[:3*n])
 	if err != nil {
 		return nil, fmt.Errorf("gif: reading color table: %s", err)
 	}
@@ -303,7 +325,7 @@ func (d *decoder) readColorTable(fields byte) (color.Palette, error) {
 	return p, nil
 }
 
-func (d *decoder) readExtension() error {
+func (d *decoder) readExtension(ctx context.Context) error {
 	extension, err := readByte(d.r)
 	if err != nil {
 		return fmt.Errorf("gif: reading extension: %v", err)
@@ -313,23 +335,23 @@ func (d *decoder) readExtension() error {
 	case eText:
 		size = 13
 	case eGraphicControl:
-		return d.readGraphicControl()
+		return d.readGraphicControl(ctx)
 	case eComment:
-		return d.readComment()
+		return d.readComment(ctx)
 	case eApplication:
-		return d.readApplication()
+		return d.readApplication(ctx)
 	default:
 		return fmt.Errorf("gif: unknown extension 0x%.2x", extension)
 	}
 	// We only hit this for extensions of type eText but that's OK.
 	if size > 0 {
-		if err := readFull(d.r, d.tmp[:size]); err != nil {
+		if err := readFull(ctx, d.r, d.tmp[:size]); err != nil {
 			return fmt.Errorf("gif: reading extension: %v", err)
 		}
 	}
 
 	for {
-		n, err := d.readBlock()
+		n, err := d.readBlock(ctx)
 		if err != nil {
 			return fmt.Errorf("gif: reading extension: %v", err)
 		}
@@ -339,8 +361,8 @@ func (d *decoder) readExtension() error {
 	}
 }
 
-func (d *decoder) readGraphicControl() error {
-	if err := readFull(d.r, d.tmp[:6]); err != nil {
+func (d *decoder) readGraphicControl(ctx context.Context) error {
+	if err := readFull(ctx, d.r, d.tmp[:6]); err != nil {
 		return fmt.Errorf("gif: can't read graphic control: %s", err)
 	}
 	if d.tmp[0] != 4 {
@@ -359,14 +381,14 @@ func (d *decoder) readGraphicControl() error {
 	return nil
 }
 
-func (d *decoder) readImageDescriptor(keepAllFrames bool) error {
-	m, err := d.newImageFromDescriptor()
+func (d *decoder) readImageDescriptor(ctx context.Context, keepAllFrames bool) error {
+	m, err := d.newImageFromDescriptor(ctx)
 	if err != nil {
 		return err
 	}
 	useLocalColorTable := d.imageFields&fColorTable != 0
 	if useLocalColorTable {
-		m.Palette, err = d.readColorTable(d.imageFields)
+		m.Palette, err = d.readColorTable(ctx, d.imageFields)
 		if err != nil {
 			return err
 		}
@@ -407,7 +429,7 @@ func (d *decoder) readImageDescriptor(keepAllFrames bool) error {
 	br := &blockReader{d: d}
 	lzwr := lzw.NewReader(br, lzw.LSB, int(litWidth))
 	defer lzwr.Close()
-	if err = readFull(lzwr, m.Pix); err != nil {
+	if err = readFull(ctx, lzwr, m.Pix); err != nil {
 		if err != io.ErrUnexpectedEOF {
 			return fmt.Errorf("gif: reading image data: %v", err)
 		}
@@ -433,7 +455,7 @@ func (d *decoder) readImageDescriptor(keepAllFrames bool) error {
 
 	// In practice, some GIFs have an extra byte in the data sub-block
 	// stream, which we ignore. See https://golang.org/issue/16146.
-	if err := br.close(); err == errTooMuch {
+	if err := br.close(ctx); err == errTooMuch {
 		return errTooMuch
 	} else if err != nil {
 		return fmt.Errorf("gif: reading image data: %v", err)
@@ -466,8 +488,8 @@ func (d *decoder) readImageDescriptor(keepAllFrames bool) error {
 	return nil
 }
 
-func (d *decoder) newImageFromDescriptor() (*image.Paletted, error) {
-	if err := readFull(d.r, d.tmp[:9]); err != nil {
+func (d *decoder) newImageFromDescriptor(ctx context.Context) (*image.Paletted, error) {
+	if err := readFull(ctx, d.r, d.tmp[:9]); err != nil {
 		return nil, fmt.Errorf("gif: can't read image descriptor: %s", err)
 	}
 	left := int(d.tmp[0]) + int(d.tmp[1])<<8
@@ -501,12 +523,12 @@ func (d *decoder) newImageFromDescriptor() (*image.Paletted, error) {
 	}, nil), nil
 }
 
-func (d *decoder) readBlock() (int, error) {
+func (d *decoder) readBlock(ctx context.Context) (int, error) {
 	n, err := readByte(d.r)
 	if n == 0 || err != nil {
 		return 0, err
 	}
-	if err := readFull(d.r, d.tmp[:n]); err != nil {
+	if err := readFull(ctx, d.r, d.tmp[:n]); err != nil {
 		return 0, err
 	}
 	return int(n), nil

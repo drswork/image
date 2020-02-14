@@ -72,11 +72,11 @@ func (m *Metadata) SetXMP(x *metadata.XMP) {
 }
 
 // readComment reads a comment from the image and saves it.
-func (d *decoder) readComment() error {
+func (d *decoder) readComment(ctx context.Context) error {
 	c := []byte{}
 
 	for {
-		n, err := d.readBlock()
+		n, err := d.readBlock(ctx)
 		if err != nil {
 			return err
 		}
@@ -89,7 +89,7 @@ func (d *decoder) readComment() error {
 }
 
 // readApplication reads an application-specific block.
-func (d *decoder) readApplication() error {
+func (d *decoder) readApplication(ctx context.Context) error {
 	// Go read the block size
 	b, err := readByte(d.r)
 	if err != nil {
@@ -97,7 +97,7 @@ func (d *decoder) readApplication() error {
 	}
 
 	// Go read in the app block body
-	if err := readFull(d.r, d.tmp[:b]); err != nil {
+	if err := readFull(ctx, d.r, d.tmp[:b]); err != nil {
 		return err
 	}
 
@@ -110,7 +110,7 @@ func (d *decoder) readApplication() error {
 	// Read in all the sub-block data
 	c := []byte{}
 	for {
-		n, err := d.readBlock()
+		n, err := d.readBlock(ctx)
 		if err != nil {
 			return err
 		}

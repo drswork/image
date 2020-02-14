@@ -7,9 +7,7 @@ package gif
 import (
 	"bytes"
 	"compress/lzw"
-	"github.com/drswork/image"
-	"github.com/drswork/image/color"
-	"github.com/drswork/image/color/palette"
+	"context"
 	"io"
 	"io/ioutil"
 	"reflect"
@@ -17,6 +15,10 @@ import (
 	"runtime/debug"
 	"strings"
 	"testing"
+
+	"github.com/drswork/image"
+	"github.com/drswork/image/color"
+	"github.com/drswork/image/color/palette"
 )
 
 // header, palette and trailer are parts of a valid 2x1 GIF image.
@@ -374,6 +376,15 @@ func TestLoopCount(t *testing.T) {
 				t.Errorf("loop count failed round-trip: %d vs %d", img.LoopCount, img1.LoopCount)
 			}
 		})
+	}
+}
+
+func TestTimeout(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.TODO())
+	cancel()
+	_, _, _, err := DecodeExtended(ctx, bytes.NewReader(testGIF))
+	if err == nil {
+		t.Errorf("Timeout check failed")
 	}
 }
 

@@ -6,6 +6,7 @@ package image_test
 
 import (
 	"bufio"
+	"context"
 	"fmt"
 	"os"
 	"testing"
@@ -49,7 +50,8 @@ func decode(filename string) (image.Image, string, error) {
 		return nil, "", err
 	}
 	defer f.Close()
-	return image.Decode(bufio.NewReader(f))
+	i, t, err := image.DecodeImage(context.TODO(), bufio.NewReader(f))
+	return i, t, err
 }
 
 func decodeConfig(filename string) (image.Config, string, error) {

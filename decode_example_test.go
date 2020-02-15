@@ -6,6 +6,7 @@
 package image_test
 
 import (
+	"context"
 	"encoding/base64"
 	"fmt"
 	"log"
@@ -39,8 +40,9 @@ func Example() {
 	//     log.Fatal(err)
 	// }
 	// defer reader.Close()
+	ctx := context.TODO()
 	reader := base64.NewDecoder(base64.StdEncoding, strings.NewReader(data))
-	m, _, err := image.Decode(reader)
+	m, _, err := image.DecodeImage(ctx, reader)
 	if err != nil {
 		log.Fatal(err)
 	}

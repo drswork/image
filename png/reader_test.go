@@ -515,7 +515,7 @@ func TestIncompleteIDATOnRowBoundary(t *testing.T) {
 		idat = "\x00\x00\x00\x0eIDAT\x78\x9c\x62\x62\x00\x04\x00\x00\xff\xff\x00\x06\x00\x03\xfa\xd0\x59\xae"
 		iend = "\x00\x00\x00\x00IEND\xae\x42\x60\x82"
 	)
-	_, err := Decode(strings.NewReader(pngHeader + ihdr + idat + iend))
+	_, _, _, err := DecodeExtended(context.TODO(), strings.NewReader(pngHeader+ihdr+idat+iend), image.OptionDecodeImage)
 	if err == nil {
 		t.Fatal("got nil error, want non-nil")
 	}
@@ -530,7 +530,7 @@ func TestTrailingIDATChunks(t *testing.T) {
 		idatZero  = "\x00\x00\x00\x00IDAT\x35\xaf\x06\x1e"
 		iend      = "\x00\x00\x00\x00IEND\xae\x42\x60\x82"
 	)
-	_, err := Decode(strings.NewReader(pngHeader + ihdr + idatWhite + idatZero + iend))
+	_, _, _, err := DecodeExtended(context.TODO(), strings.NewReader(pngHeader+ihdr+idatWhite+idatZero+iend), image.OptionDecodeImage)
 	if err != nil {
 		t.Fatalf("decoding valid image: %v", err)
 	}
@@ -539,7 +539,7 @@ func TestTrailingIDATChunks(t *testing.T) {
 	// The following chunk contains a single pixel with color.Gray{0}.
 	const idatBlack = "\x00\x00\x00\x0eIDAT\x78\x9c\x62\x62\x00\x04\x00\x00\xff\xff\x00\x06\x00\x03\xfa\xd0\x59\xae"
 
-	img, err := Decode(strings.NewReader(pngHeader + ihdr + idatWhite + idatBlack + iend))
+	img, _, _, err := DecodeExtended(context.TODO(), strings.NewReader(pngHeader+ihdr+idatWhite+idatBlack+iend), image.OptionDecodeImage)
 	if err != nil {
 		t.Fatalf("trailing IDAT not ignored: %v", err)
 	}
@@ -580,7 +580,7 @@ func TestMultipletRNSChunks(t *testing.T) {
 		b = append(b, iend...)
 
 		var want color.Color
-		m, err := Decode(bytes.NewReader(b))
+		m, _, _, err := DecodeExtended(context.TODO(), bytes.NewReader(b), image.OptionDecodeImage)
 		switch i {
 		case 0:
 			if err != nil {
@@ -612,7 +612,7 @@ func TestUnknownChunkLengthUnderflow(t *testing.T) {
 		0xd3, 0x11, 0x9a, 0x73, 0x00, 0x00, 0xf8, 0x1e, 0xf3, 0x2e, 0x00, 0x00,
 		0x01, 0x00, 0xff, 0xff, 0xff, 0xff, 0x07, 0xf4, 0x7c, 0x55, 0x04, 0x1a,
 		0xd3}
-	_, err := Decode(bytes.NewReader(data))
+	_, _, _, err := DecodeExtended(context.TODO(), bytes.NewReader(data), image.OptionDecodeImage)
 	if err == nil {
 		t.Errorf("Didn't fail reading an unknown chunk with length 0xffffffff")
 	}
@@ -635,7 +635,7 @@ func TestPaletted8OutOfRangePixel(t *testing.T) {
 
 func TestGray8Transparent(t *testing.T) {
 	// These bytes come from https://golang.org/issues/19553
-	m, err := Decode(bytes.NewReader([]byte{
+	m, _, _, err := DecodeExtended(context.TODO(), bytes.NewReader([]byte{
 		0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d, 0x49, 0x48, 0x44, 0x52,
 		0x00, 0x00, 0x00, 0x0f, 0x00, 0x00, 0x00, 0x0b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x85, 0x2c, 0x88,
 		0x80, 0x00, 0x00, 0x00, 0x02, 0x74, 0x52, 0x4e, 0x53, 0x00, 0xff, 0x5b, 0x91, 0x22, 0xb5, 0x00,
@@ -649,7 +649,7 @@ func TestGray8Transparent(t *testing.T) {
 		0x92, 0xd7, 0x82, 0x41, 0x31, 0x9c, 0x3f, 0x07, 0x02, 0xee, 0xa1, 0xaa, 0xff, 0xff, 0x9f, 0xe1,
 		0xd9, 0x56, 0x30, 0xf8, 0x0e, 0xe5, 0x03, 0x00, 0xa9, 0x42, 0x84, 0x3d, 0xdf, 0x8f, 0xa6, 0x8f,
 		0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4e, 0x44, 0xae, 0x42, 0x60, 0x82,
-	}))
+	}), image.OptionDecodeImage)
 	if err != nil {
 		t.Fatalf("Decode: %v", err)
 	}
@@ -700,13 +700,13 @@ func TestDimensionOverflow(t *testing.T) {
 	// It encodes a 2147483646 × 2147483646 (i.e. 0x7ffffffe × 0x7ffffffe)
 	// NRGBA image. The (width × height) per se doesn't overflow an int64, but
 	// (width × height × bytesPerPixel) will.
-	_, err := Decode(bytes.NewReader([]byte{
+	_, _, _, err := DecodeExtended(context.TODO(), bytes.NewReader([]byte{
 		0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d, 0x49, 0x48, 0x44, 0x52,
 		0x7f, 0xff, 0xff, 0xfe, 0x7f, 0xff, 0xff, 0xfe, 0x08, 0x06, 0x00, 0x00, 0x00, 0x30, 0x57, 0xb3,
 		0xfd, 0x00, 0x00, 0x00, 0x15, 0x49, 0x44, 0x41, 0x54, 0x78, 0x9c, 0x62, 0x62, 0x20, 0x12, 0x8c,
 		0x2a, 0xa4, 0xb3, 0x42, 0x40, 0x00, 0x00, 0x00, 0xff, 0xff, 0x13, 0x38, 0x00, 0x15, 0x2d, 0xef,
 		0x5f, 0x0f, 0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4e, 0x44, 0xae, 0x42, 0x60, 0x82,
-	}))
+	}), image.OptionDecodeImage)
 	if _, ok := err.(UnsupportedError); !ok {
 		t.Fatalf("Decode: got %v (of type %T), want non-nil error (of type png.UnsupportedError)", err, err)
 	}
@@ -724,8 +724,9 @@ func benchmarkDecode(b *testing.B, filename string, bytesPerPixel int) {
 	b.SetBytes(int64(cfg.Width * cfg.Height * bytesPerPixel))
 	b.ReportAllocs()
 	b.ResetTimer()
+	ctx := context.TODO()
 	for i := 0; i < b.N; i++ {
-		Decode(bytes.NewReader(data))
+		DecodeExtended(ctx, bytes.NewReader(data), image.OptionDecodeImage)
 	}
 }
 

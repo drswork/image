@@ -5,12 +5,14 @@
 package draw
 
 import (
-	"github.com/drswork/image"
-	"github.com/drswork/image/color"
-	"github.com/drswork/image/png"
+	"context"
 	"os"
 	"testing"
 	"testing/quick"
+
+	"github.com/drswork/image"
+	"github.com/drswork/image/color"
+	"github.com/drswork/image/png"
 )
 
 func eq(c0, c1 color.Color) bool {
@@ -434,7 +436,8 @@ func TestPaletted(t *testing.T) {
 		t.Fatalf("open: %v", err)
 	}
 	defer f.Close()
-	src, err := png.Decode(f)
+	ctx := context.TODO()
+	src, _, _, err := png.DecodeExtended(ctx, f, image.OptionDecodeImage)
 	if err != nil {
 		t.Fatalf("decode: %v", err)
 	}

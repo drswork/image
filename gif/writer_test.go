@@ -6,6 +6,7 @@ package gif
 
 import (
 	"bytes"
+	"context"
 	"io/ioutil"
 	"math/rand"
 	"os"
@@ -24,7 +25,8 @@ func readImg(filename string) (image.Image, error) {
 		return nil, err
 	}
 	defer f.Close()
-	m, _, err := image.Decode(f)
+	ctx := context.TODO()
+	m, _, err := image.DecodeImage(ctx, f)
 	return m, err
 }
 
@@ -97,7 +99,8 @@ func TestWriter(t *testing.T) {
 			t.Error(tc.filename, err)
 			continue
 		}
-		m1, err := Decode(&buf)
+		ctx := context.TODO()
+		m1, _, _, err := DecodeExtended(ctx, &buf, image.OptionDecodeImage)
 		if err != nil {
 			t.Error(tc.filename, err)
 			continue
@@ -126,7 +129,8 @@ func TestSubImage(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Encode: %v", err)
 	}
-	m1, err := Decode(&buf)
+	ctx := context.TODO()
+	m1, _, _, err := DecodeExtended(ctx, &buf, image.OptionDecodeImage)
 	if err != nil {
 		t.Fatalf("Decode: %v", err)
 	}
@@ -355,7 +359,8 @@ func TestEncodeNonZeroMinPoint(t *testing.T) {
 			t.Errorf("p=%v: Encode: %v", p, err)
 			continue
 		}
-		m, err := Decode(&buf)
+		ctx := context.TODO()
+		m, _, _, err := DecodeExtended(ctx, &buf, image.OptionDecodeImage)
 		if err != nil {
 			t.Errorf("p=%v: Decode: %v", p, err)
 			continue
@@ -385,7 +390,8 @@ func TestEncodeNonZeroMinPoint(t *testing.T) {
 			t.Errorf("gray-diagonal: Encode: %v", err)
 			return
 		}
-		m, err := Decode(&buf)
+		ctx := context.TODO()
+		m, _, _, err := DecodeExtended(ctx, &buf, image.OptionDecodeImage)
 		if err != nil {
 			t.Errorf("gray-diagonal: Decode: %v", err)
 			return
@@ -582,7 +588,8 @@ func TestEncodeCroppedSubImages(t *testing.T) {
 			t.Errorf("Encode: sr=%v: %v", sr, err)
 			continue
 		}
-		if _, err := Decode(buf); err != nil {
+		ctx := context.TODO()
+		if _, _, _, err := DecodeExtended(ctx, buf, image.OptionDecodeImage); err != nil {
 			t.Errorf("Decode: sr=%v: %v", sr, err)
 		}
 	}
@@ -610,7 +617,8 @@ func TestEncodeWrappedImage(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Encode: %v", err)
 	}
-	w1, err := Decode(buf)
+	ctx := context.TODO()
+	w1, _, _, err := DecodeExtended(ctx, buf, image.OptionDecodeImage)
 	if err != nil {
 		t.Fatalf("Dencode: %v", err)
 	}
@@ -636,7 +644,7 @@ func TestEncodeWrappedImage(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Encode: %v", err)
 	}
-	w1, err = Decode(buf)
+	w1, _, _, err = DecodeExtended(ctx, buf, image.OptionDecodeImage)
 	if err != nil {
 		t.Fatalf("Dencode: %v", err)
 	}

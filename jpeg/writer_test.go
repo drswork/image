@@ -6,14 +6,16 @@ package jpeg
 
 import (
 	"bytes"
+	"context"
 	"fmt"
-	"github.com/drswork/image"
-	"github.com/drswork/image/color"
-	"github.com/drswork/image/png"
 	"io/ioutil"
 	"math/rand"
 	"os"
 	"testing"
+
+	"github.com/drswork/image"
+	"github.com/drswork/image/color"
+	"github.com/drswork/image/png"
 )
 
 // zigzag maps from the natural ordering to the zig-zag ordering. For example,
@@ -124,7 +126,9 @@ func readPng(filename string) (image.Image, error) {
 		return nil, err
 	}
 	defer f.Close()
-	return png.Decode(f)
+	ctx := context.TODO()
+	i, _, _, err := png.DecodeExtended(ctx, f, image.OptionDecodeImage)
+	return i, err
 }
 
 func TestWriter(t *testing.T) {
@@ -143,7 +147,8 @@ func TestWriter(t *testing.T) {
 			continue
 		}
 		// Decode that JPEG.
-		m1, err := Decode(&buf)
+		ctx := context.TODO()
+		m1, _, _, err := DecodeExtended(ctx, &buf, image.OptionDecodeImage)
 		if err != nil {
 			t.Error(tc.filename, err)
 			continue
@@ -171,7 +176,8 @@ func TestWriteGrayscale(t *testing.T) {
 	if err := Encode(&buf, m0, nil); err != nil {
 		t.Fatal(err)
 	}
-	m1, err := Decode(&buf)
+	ctx := context.TODO()
+	m1, _, _, err := DecodeExtended(ctx, &buf, image.OptionDecodeImage)
 	if err != nil {
 		t.Fatal(err)
 	}

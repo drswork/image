@@ -8,18 +8,22 @@ package png
 
 import (
 	"bytes"
+	"context"
 	"fmt"
+
+	"github.com/drswork/image"
 )
 
 func Fuzz(data []byte) int {
-	cfg, err := DecodeConfig(bytes.NewReader(data))
+	ctx := context.Background()
+	_, _, cfg, err := DecodeExtended(ctx, bytes.NewReader(data), image.OptionDecodeConfig)
 	if err != nil {
 		return 0
 	}
 	if cfg.Width*cfg.Height > 1e6 {
 		return 0
 	}
-	img, err := Decode(bytes.NewReader(data))
+	img, _, _, err := DecodeExtended(ctx, bytes.NewReader(data), image.OptionDecodeImage)
 	if err != nil {
 		return 0
 	}
@@ -36,7 +40,7 @@ func Fuzz(data []byte) int {
 		if err != nil {
 			panic(err)
 		}
-		img1, err := Decode(&w)
+		img1, _, err := DecodeExtended(ctx, &w, image.OptionDecodeImage)
 		if err != nil {
 			panic(err)
 		}

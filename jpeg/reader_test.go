@@ -91,7 +91,9 @@ func decodeFile(filename string) (image.Image, error) {
 		return nil, err
 	}
 	defer f.Close()
-	return Decode(f)
+	ctx := context.TODO()
+	i, _, _, err := DecodeExtended(ctx, f, image.OptionDecodeImage)
+	return i, err
 }
 
 type eofReader struct {
@@ -125,9 +127,10 @@ func TestDecodeEOF(t *testing.T) {
 	}
 
 	n := len(data)
+	ctx := context.TODO()
 	for i := 0; i < n; {
 		r := &eofReader{data[:n-i], data[n-i:], -1}
-		_, err := Decode(r)
+		_, _, _, err := DecodeExtended(ctx, r, image.OptionDecodeImage)
 		if err != nil {
 			t.Errorf("Decode with Read() = %d, EOF: %v", r.lenAtEOF, err)
 		}
@@ -203,6 +206,7 @@ func TestTimeout(t *testing.T) {
 }
 
 func TestTruncatedSOSDataDoesntPanic(t *testing.T) {
+	ctx := context.Background()
 	b, err := ioutil.ReadFile("../testdata/video-005.gray.q50.jpeg")
 	if err != nil {
 		t.Fatal(err)
@@ -218,7 +222,7 @@ func TestTruncatedSOSDataDoesntPanic(t *testing.T) {
 		j = len(b)
 	}
 	for ; i < j; i++ {
-		Decode(bytes.NewReader(b[:i]))
+		DecodeExtended(ctx, bytes.NewReader(b[:i]), image.OptionDecodeImage)
 	}
 }
 
@@ -264,7 +268,8 @@ func TestLargeImageWithShortData(t *testing.T) {
 		"\xf9\x2e\xe0\x0a\x62\x7f\xdf\xd9"
 	c := make(chan error, 1)
 	go func() {
-		_, err := Decode(strings.NewReader(input))
+		ctx := context.TODO()
+		_, _, _, err := DecodeExtended(ctx, strings.NewReader(input), image.OptionDecodeImage)
 		c <- err
 	}()
 	select {
@@ -318,7 +323,8 @@ func TestExtraneousData(t *testing.T) {
 		buf.WriteString("\xff\xd9")
 
 		// Check that we can still decode the resultant image.
-		got, err := Decode(buf)
+		ctx := context.TODO()
+		got, _, _, err := DecodeExtended(ctx, buf, image.OptionDecodeImage)
 		if err != nil {
 			t.Errorf("could not decode image #%d: %v", i, err)
 			nerr++
@@ -349,8 +355,9 @@ func benchmarkDecode(b *testing.B, filename string) {
 	b.SetBytes(int64(cfg.Width * cfg.Height * 4))
 	b.ReportAllocs()
 	b.ResetTimer()
+	ctx := context.TODO()
 	for i := 0; i < b.N; i++ {
-		Decode(bytes.NewReader(data))
+		DecodeExtended(ctx, bytes.NewReader(data), image.OptionDecodeImage)
 	}
 }
 

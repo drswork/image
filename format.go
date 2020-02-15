@@ -186,6 +186,13 @@ type DataDecodeOptions struct {
 	DecodeConfig DecodingOption
 }
 
+// Sadly Go doesn't support constant structs or this would be a const
+var (
+	OptionDecodeImage    = DataDecodeOptions{DecodeData, DiscardData, DecodeData}
+	OptionDecodeMetadata = DataDecodeOptions{DiscardData, DecodeData, DiscardData}
+	OptionDecodeConfig   = DataDecodeOptions{DiscardData, DiscardData, DecodeData}
+)
+
 // IsImageReadOption is a no-op function which exists to satisfy the
 // ReadOption interface.
 func (_ DataDecodeOptions) IsImageReadOption() {
@@ -307,7 +314,7 @@ type WriteOption interface {
 // Decode decodes an image that has been encoded in a registered format.
 // The string returned is the format name used during format registration.
 // Format registration is typically done by an init function in the codec-
-// specific package.
+// specific package. (DEPRECATED)
 func Decode(r io.Reader) (Image, string, error) {
 	i, _, _, t, err := DecodeWithOptions(context.TODO(), r, DataDecodeOptions{DecodeData, DiscardData, DiscardData})
 	return i, t, err
@@ -328,10 +335,39 @@ func DecodeWithOptions(ctx context.Context, r io.Reader, opts ...ReadOption) (Im
 
 }
 
+// Decode decodes an image that has been encoded in a registered format.
+// The string returned is the format name used during format registration.
+// Format registration is typically done by an init function in the codec-
+// specific package.
+func DecodeImage(ctx context.Context, r io.Reader, opts ...ReadOption) (Image, string, error) {
+	opts = append(opts, DataDecodeOptions{DecodeData, DiscardData, DiscardData})
+	i, _, _, t, err := DecodeWithOptions(ctx, r, opts...)
+	return i, t, err
+}
+
+// Decode decodes the metadata for an image that has been encoded in a
+// registered format.  The string returned is the format name used
+// during format registration.  Format registration is typically done
+// by an init function in the codec- specific package.
+//
+// Note that if you need both the image and the metadata for an image
+// it's more efficient to call DecodeWithOption and extract both
+// simiultaneously.
+func DecodeMetadata(ctx context.Context, r io.Reader, opts ...ReadOption) (Metadata, string, error) {
+	opts = append(opts, DataDecodeOptions{DiscardData, DecodeData, DiscardData})
+	_, m, _, t, err := DecodeWithOptions(ctx, r, opts...)
+	return m, t, err
+
+}
+
 // DecodeConfig decodes the color model and dimensions of an image that has
 // been encoded in a registered format. The string returned is the format name
 // used during format registration. Format registration is typically done by
 // an init function in the codec-specific package.
+//
+// This function has been deprecated; use DecodeWithOptions or
+// DecodeMetadata and extract the info you need from the metadata
+// returned.
 func DecodeConfig(r io.Reader) (Config, string, error) {
 	rr := asReader(r)
 	f := sniff(rr)

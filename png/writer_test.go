@@ -45,7 +45,8 @@ func encodeDecode(m image.Image) (image.Image, error) {
 	if err != nil {
 		return nil, err
 	}
-	return Decode(&b)
+	i, _, _, err := DecodeExtended(context.TODO(), &b, image.OptionDecodeImage)
+	return i, err
 }
 
 func TestWriter(t *testing.T) {
@@ -203,10 +204,11 @@ func TestWriterLevels(t *testing.T) {
 	if b2.Len() <= b1.Len() {
 		t.Error("DefaultCompression encoding was larger than NoCompression encoding")
 	}
-	if _, err := Decode(&b1); err != nil {
+	ctx := context.TODO()
+	if _, _, _, err := DecodeExtended(ctx, &b1, image.OptionDecodeImage); err != nil {
 		t.Error("cannot decode DefaultCompression")
 	}
-	if _, err := Decode(&b2); err != nil {
+	if _, _, _, err := DecodeExtended(ctx, &b2, image.OptionDecodeImage); err != nil {
 		t.Error("cannot decode NoCompression")
 	}
 }

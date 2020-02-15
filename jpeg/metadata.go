@@ -145,11 +145,11 @@ func (m *Metadata) SetIcc(i *metadata.ICC) {
 	m.rawIcc = nil
 }
 
-func (d *decoder) processApp0(n int) error {
+func (d *decoder) processApp0(ctx context.Context, n int) error {
 	if n < 5 {
-		return d.ignore(n)
+		return d.ignore(ctx, n)
 	}
-	if err := d.readFull(d.tmp[:5]); err != nil {
+	if err := d.readFull(ctx, d.tmp[:5]); err != nil {
 		return err
 	}
 	n -= 5
@@ -157,19 +157,19 @@ func (d *decoder) processApp0(n int) error {
 	d.jfif = d.tmp[0] == 'J' && d.tmp[1] == 'F' && d.tmp[2] == 'I' && d.tmp[3] == 'F' && d.tmp[4] == '\x00'
 
 	if n > 0 {
-		return d.ignore(n)
+		return d.ignore(ctx, n)
 	}
 	return nil
 
 }
 
-func (d *decoder) processApp1(n int) error {
+func (d *decoder) processApp1(ctx context.Context, n int) error {
 	// The app1 block contains EXIF, XMP, and extended XMP data. Amongst other things, though these are the only ones we're going to worry about at the moment.
 	return nil
 }
 
 // processApp2 handles the APP2 block.
-func (d *decoder) processApp2(n int) error {
+func (d *decoder) processApp2(ctx context.Context, n int) error {
 	// This block holds the ICC profile (maybe). Note that the ICC
 	// profile may be larger than the largest block size (a touch less
 	// than 64k) and therefore may span multiple blocks. Because of

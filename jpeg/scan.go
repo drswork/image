@@ -5,6 +5,8 @@
 package jpeg
 
 import (
+	"context"
+
 	"github.com/drswork/image"
 )
 
@@ -48,14 +50,14 @@ func (d *decoder) makeImg(mxx, myy int) {
 }
 
 // Specified in section B.2.3.
-func (d *decoder) processSOS(n int) error {
+func (d *decoder) processSOS(ctx context.Context, n int) error {
 	if d.nComp == 0 {
 		return FormatError("missing SOF marker")
 	}
 	if n < 6 || 4+2*d.nComp < n || n%2 != 0 {
 		return FormatError("SOS has wrong length")
 	}
-	if err := d.readFull(d.tmp[:n]); err != nil {
+	if err := d.readFull(ctx, d.tmp[:n]); err != nil {
 		return err
 	}
 	nComp := int(d.tmp[0])
@@ -307,7 +309,7 @@ func (d *decoder) processSOS(n int) error {
 			if d.ri > 0 && mcu%d.ri == 0 && mcu < mxx*myy {
 				// A more sophisticated decoder could use RST[0-7] markers to resynchronize from corrupt input,
 				// but this one assumes well-formed input, and hence the restart marker follows immediately.
-				if err := d.readFull(d.tmp[:2]); err != nil {
+				if err := d.readFull(ctx, d.tmp[:2]); err != nil {
 					return err
 				}
 				if d.tmp[0] != 0xff || d.tmp[1] != expectedRST {

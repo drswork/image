@@ -6,9 +6,8 @@ package jpeg
 
 import (
 	"bytes"
+	"context"
 	"fmt"
-	"github.com/drswork/image"
-	"github.com/drswork/image/color"
 	"io"
 	"io/ioutil"
 	"math/rand"
@@ -16,6 +15,9 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/drswork/image"
+	"github.com/drswork/image/color"
 )
 
 // TestDecodeProgressive tests that decoding the baseline and progressive
@@ -185,6 +187,19 @@ func pixString(pix []byte, stride, x, y int) string {
 		fmt.Fprintf(s, "\n")
 	}
 	return s.String()
+}
+
+func TestTimeout(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.TODO())
+	cancel()
+	b, err := ioutil.ReadFile("../testdata/video-005.gray.q50.jpeg")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, _, _, err = DecodeExtended(ctx, bytes.NewReader(b))
+	if err == nil {
+		t.Fatalf("Timeout failed")
+	}
 }
 
 func TestTruncatedSOSDataDoesntPanic(t *testing.T) {

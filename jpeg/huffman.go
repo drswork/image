@@ -5,6 +5,7 @@
 package jpeg
 
 import (
+	"context"
 	"io"
 )
 
@@ -88,12 +89,12 @@ func (d *decoder) receiveExtend(t uint8) (int32, error) {
 
 // processDHT processes a Define Huffman Table marker, and initializes a huffman
 // struct from its contents. Specified in section B.2.4.2.
-func (d *decoder) processDHT(n int) error {
+func (d *decoder) processDHT(ctx context.Context, n int) error {
 	for n > 0 {
 		if n < 17 {
 			return FormatError("DHT has wrong length")
 		}
-		if err := d.readFull(d.tmp[:17]); err != nil {
+		if err := d.readFull(ctx, d.tmp[:17]); err != nil {
 			return err
 		}
 		tc := d.tmp[0] >> 4
@@ -126,7 +127,7 @@ func (d *decoder) processDHT(n int) error {
 		if n < 0 {
 			return FormatError("DHT has wrong length")
 		}
-		if err := d.readFull(h.vals[:h.nCodes]); err != nil {
+		if err := d.readFull(ctx, h.vals[:h.nCodes]); err != nil {
 			return err
 		}
 

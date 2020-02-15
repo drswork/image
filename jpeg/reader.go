@@ -252,7 +252,7 @@ func (d *decoder) readByteStuffedByte() (x byte, err error) {
 
 // readFull reads exactly len(p) bytes into p. It does not care about byte
 // stuffing.
-func (d *decoder) readFull(p []byte) error {
+func (d *decoder) readFull(ctx context.Context, p []byte) error {
 	// Unread the overshot bytes, if any.
 	if d.bytes.nUnreadable != 0 {
 		if d.bits.n >= 8 {
@@ -262,6 +262,12 @@ func (d *decoder) readFull(p []byte) error {
 	}
 
 	for {
+		// Check and see if our context was cancelled or expired.
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+		}
 		n := copy(p, d.bytes.buf[d.bytes.i:d.bytes.j])
 		p = p[n:]
 		d.bytes.i += n
@@ -279,7 +285,7 @@ func (d *decoder) readFull(p []byte) error {
 }
 
 // ignore ignores the next n bytes.
-func (d *decoder) ignore(n int) error {
+func (d *decoder) ignore(ctx context.Context, n int) error {
 	// Unread the overshot bytes, if any.
 	if d.bytes.nUnreadable != 0 {
 		if d.bits.n >= 8 {
@@ -309,7 +315,7 @@ func (d *decoder) ignore(n int) error {
 }
 
 // Specified in section B.2.2.
-func (d *decoder) processSOF(n int) error {
+func (d *decoder) processSOF(ctx context.Context, n int) error {
 	if d.nComp != 0 {
 		return FormatError("multiple SOF markers")
 	}
@@ -323,7 +329,7 @@ func (d *decoder) processSOF(n int) error {
 	default:
 		return UnsupportedError("number of components")
 	}
-	if err := d.readFull(d.tmp[:n]); err != nil {
+	if err := d.readFull(ctx, d.tmp[:n]); err != nil {
 		return err
 	}
 	// We only support 8-bit precision.
@@ -433,7 +439,7 @@ func (d *decoder) processSOF(n int) error {
 }
 
 // Specified in section B.2.4.1.
-func (d *decoder) processDQT(n int) error {
+func (d *decoder) processDQT(ctx context.Context, n int) error {
 loop:
 	for n > 0 {
 		n--
@@ -453,7 +459,7 @@ loop:
 				break loop
 			}
 			n -= blockSize
-			if err := d.readFull(d.tmp[:blockSize]); err != nil {
+			if err := d.readFull(ctx, d.tmp[:blockSize]); err != nil {
 				return err
 			}
 			for i := range d.quant[tq] {
@@ -464,7 +470,7 @@ loop:
 				break loop
 			}
 			n -= 2 * blockSize
-			if err := d.readFull(d.tmp[:2*blockSize]); err != nil {
+			if err := d.readFull(ctx, d.tmp[:2*blockSize]); err != nil {
 				return err
 			}
 			for i := range d.quant[tq] {
@@ -479,22 +485,22 @@ loop:
 }
 
 // Specified in section B.2.4.4.
-func (d *decoder) processDRI(n int) error {
+func (d *decoder) processDRI(ctx context.Context, n int) error {
 	if n != 2 {
 		return FormatError("DRI has wrong length")
 	}
-	if err := d.readFull(d.tmp[:2]); err != nil {
+	if err := d.readFull(ctx, d.tmp[:2]); err != nil {
 		return err
 	}
 	d.ri = int(d.tmp[0])<<8 + int(d.tmp[1])
 	return nil
 }
 
-func (d *decoder) processApp14Marker(n int) error {
+func (d *decoder) processApp14Marker(ctx context.Context, n int) error {
 	if n < 12 {
-		return d.ignore(n)
+		return d.ignore(ctx, n)
 	}
-	if err := d.readFull(d.tmp[:12]); err != nil {
+	if err := d.readFull(ctx, d.tmp[:12]); err != nil {
 		return err
 	}
 	n -= 12
@@ -505,7 +511,7 @@ func (d *decoder) processApp14Marker(n int) error {
 	}
 
 	if n > 0 {
-		return d.ignore(n)
+		return d.ignore(ctx, n)
 	}
 	return nil
 }
@@ -515,7 +521,7 @@ func (d *decoder) decode(ctx context.Context, r io.Reader, decodeImage, decodeMe
 	d.r = r
 
 	// Check for the Start Of Image marker.
-	if err := d.readFull(d.tmp[:2]); err != nil {
+	if err := d.readFull(ctx, d.tmp[:2]); err != nil {
 		return nil, err
 	}
 	if d.tmp[0] != 0xff || d.tmp[1] != soiMarker {
@@ -524,7 +530,7 @@ func (d *decoder) decode(ctx context.Context, r io.Reader, decodeImage, decodeMe
 
 	// Process the remaining segments until the End Of Image marker.
 	for {
-		err := d.readFull(d.tmp[:2])
+		err := d.readFull(ctx, d.tmp[:2])
 		if err != nil {
 			return nil, err
 		}
@@ -583,7 +589,7 @@ func (d *decoder) decode(ctx context.Context, r io.Reader, decodeImage, decodeMe
 
 		// Read the 16-bit length of the segment. The value includes the 2 bytes for the
 		// length itself, so we subtract 2 to get the number of remaining bytes.
-		if err = d.readFull(d.tmp[:2]); err != nil {
+		if err = d.readFull(ctx, d.tmp[:2]); err != nil {
 			return nil, err
 		}
 		n := int(d.tmp[0])<<8 + int(d.tmp[1]) - 2
@@ -595,7 +601,7 @@ func (d *decoder) decode(ctx context.Context, r io.Reader, decodeImage, decodeMe
 		case sof0Marker, sof1Marker, sof2Marker:
 			d.baseline = marker == sof0Marker
 			d.progressive = marker == sof2Marker
-			err = d.processSOF(n)
+			err = d.processSOF(ctx, n)
 			//			if configOnly && d.jfif {
 			//			return nil, err
 			//	}
@@ -603,32 +609,32 @@ func (d *decoder) decode(ctx context.Context, r io.Reader, decodeImage, decodeMe
 			// if configOnly {
 			// 	err = d.ignore(n)
 			// } else {
-			err = d.processDHT(n)
+			err = d.processDHT(ctx, n)
 			// }
 		case dqtMarker:
 			// if configOnly {
 			// 	err = d.ignore(n)
 			// } else {
-			err = d.processDQT(n)
+			err = d.processDQT(ctx, n)
 			// }
 		case sosMarker:
 			// if configOnly {
 			// 	return nil, nil
 			// }
-			err = d.processSOS(n)
+			err = d.processSOS(ctx, n)
 		case driMarker:
 			// if configOnly {
 			// 	err = d.ignore(n)
 			// } else {
-			err = d.processDRI(n)
+			err = d.processDRI(ctx, n)
 			// }
 		case app0Marker:
-			err = d.processApp0(n)
+			err = d.processApp0(ctx, n)
 		case app14Marker:
-			err = d.processApp14Marker(n)
+			err = d.processApp14Marker(ctx, n)
 		default:
 			if app0Marker <= marker && marker <= app15Marker || marker == comMarker {
-				err = d.ignore(n)
+				err = d.ignore(ctx, n)
 			} else if marker < 0xc0 { // See Table B.1 "Marker code assignments".
 				err = FormatError("unknown marker")
 			} else {

@@ -9,10 +9,11 @@ import (
 	"compress/zlib"
 	"encoding/binary"
 	"hash/crc32"
-	"github.com/drswork/image"
-	"github.com/drswork/image/color"
 	"io"
 	"strconv"
+
+	"github.com/drswork/image"
+	"github.com/drswork/image/color"
 )
 
 // Encoder configures encoding PNG images.

@@ -23,7 +23,7 @@ var ErrOption = errors.New("image: invalid options")
 // A format holds an image format's name, magic header and how to decode it.
 type format struct {
 	name, magic string
-	decode      func(context.Context, io.Reader, ...ReadOption) (Image, Metadata, Config, error)
+	decode      func(context.Context, io.Reader, ...ReadOption) (Image, Metadata, error)
 }
 
 // Formats is the list of registered formats.
@@ -44,27 +44,27 @@ var (
 func RegisterFormat(name, magic string, decode func(io.Reader) (Image, error), decodeConfig func(io.Reader) (Config, error)) {
 
 	// Create a function suitable for RegisterFormatExtended.
-	f := func(_ context.Context, r io.Reader, o ...ReadOption) (Image, Metadata, Config, error) {
+	f := func(_ context.Context, r io.Reader, o ...ReadOption) (Image, Metadata, error) {
 		var ro *DataDecodeOptions
 		// Run through the passed in options and pull out the ones that we understand
 		for _, op := range o {
 			iro, ok := op.(DataDecodeOptions)
 			if ok {
 				if ro != nil {
-					return nil, nil, Config{}, ErrOption
+					return nil, nil, ErrOption
 				}
 				ro = &iro
 			}
 		}
 
-		// Images and configs can't be deferred.
-		if ro.DecodeImage == DeferData || ro.DecodeConfig == DeferData {
-			return nil, nil, Config{}, ErrOption
+		// Images currently can't be deferred.
+		if ro.DecodeImage == DeferData {
+			return nil, nil, ErrOption
 		}
 
 		// Can't decode configs if we don't have a config decoding function.
-		if ro.DecodeConfig == DecodeData && decodeConfig == nil {
-			return nil, nil, Config{}, errors.New("image: config decode requested with no config decoder function provided")
+		if ro.DecodeMetadata != DiscardData && decodeConfig == nil {
+			return nil, nil, errors.New("image: metdata decode requested with no metadata decoding function available")
 		}
 
 		var id Image
@@ -73,18 +73,19 @@ func RegisterFormat(name, magic string, decode func(io.Reader) (Image, error), d
 		if ro.DecodeImage == DefaultDecodeOption || ro.DecodeImage == DecodeData {
 			id, err = decode(r)
 			if err != nil {
-				return nil, nil, Config{}, err
+				return nil, nil, err
 			}
 		}
 		// Decode the config if requested.
-		if ro.DecodeConfig == DecodeData && decodeConfig != nil {
+		if ro.DecodeMetadata != DiscardData && decodeConfig != nil {
 			cd, err := decodeConfig(r)
 			if err != nil {
-				return nil, nil, Config{}, err
+				return nil, nil, err
 			}
-			return id, nil, cd, nil
+			m := &fakeMetadata{Config: &cd}
+			return id, m, nil
 		}
-		return id, nil, Config{}, err
+		return id, nil, err
 
 	}
 	// Register our constructed decoding function.
@@ -97,7 +98,7 @@ func RegisterFormat(name, magic string, decode func(io.Reader) (Image, error), d
 // string can contain "?" wildcards that each match any one byte.
 // Decode is the function that decodes the encoded image, its
 // metadata, and its configuration information.
-func RegisterFormatExtended(name, magic string, decode func(context.Context, io.Reader, ...ReadOption) (Image, Metadata, Config, error)) {
+func RegisterFormatExtended(name, magic string, decode func(context.Context, io.Reader, ...ReadOption) (Image, Metadata, error)) {
 	formatsMu.Lock()
 	formats, _ := atomicFormats.Load().([]format)
 	atomicFormats.Store(append(formats, format{name, magic, decode}))
@@ -180,17 +181,12 @@ type DataDecodeOptions struct {
 	// DefaultDecodeData, DiscardData, DeferData, and
 	// DecodeData. Default is DeferData.
 	DecodeMetadata DecodingOption
-	// DecodeConfig specifies whether the image config should be decoded
-	// when an image is read. Valid options are DefaultDecodeData,
-	// DiscardData, and DecodeData. Default is DiscardData.
-	DecodeConfig DecodingOption
 }
 
 // Sadly Go doesn't support constant structs or this would be a const
 var (
-	OptionDecodeImage    = DataDecodeOptions{DecodeData, DiscardData, DecodeData}
-	OptionDecodeMetadata = DataDecodeOptions{DiscardData, DecodeData, DiscardData}
-	OptionDecodeConfig   = DataDecodeOptions{DiscardData, DiscardData, DecodeData}
+	OptionDecodeImage    = DataDecodeOptions{DecodeData, DiscardData}
+	OptionDecodeMetadata = DataDecodeOptions{DiscardData, DecodeData}
 )
 
 // IsImageReadOption is a no-op function which exists to satisfy the
@@ -316,7 +312,7 @@ type WriteOption interface {
 // Format registration is typically done by an init function in the codec-
 // specific package. (DEPRECATED)
 func Decode(r io.Reader) (Image, string, error) {
-	i, _, _, t, err := DecodeWithOptions(context.TODO(), r, DataDecodeOptions{DecodeData, DiscardData, DiscardData})
+	i, _, t, err := DecodeWithOptions(context.TODO(), r, DataDecodeOptions{DecodeData, DiscardData})
 	return i, t, err
 }
 
@@ -324,14 +320,14 @@ func Decode(r io.Reader) (Image, string, error) {
 // metadata, and its config. The string returned is the format name used
 // during format registration. Format registration is typically done
 // by an init function in the codec-specific package.
-func DecodeWithOptions(ctx context.Context, r io.Reader, opts ...ReadOption) (Image, Metadata, Config, string, error) {
+func DecodeWithOptions(ctx context.Context, r io.Reader, opts ...ReadOption) (Image, Metadata, string, error) {
 	rr := asReader(r)
 	f := sniff(rr)
 	if f.decode == nil {
-		return nil, nil, Config{}, "", ErrFormat
+		return nil, nil, "", ErrFormat
 	}
-	i, m, c, err := f.decode(ctx, rr, opts...)
-	return i, m, c, f.name, err
+	i, m, err := f.decode(ctx, rr, opts...)
+	return i, m, f.name, err
 
 }
 
@@ -340,8 +336,8 @@ func DecodeWithOptions(ctx context.Context, r io.Reader, opts ...ReadOption) (Im
 // Format registration is typically done by an init function in the codec-
 // specific package.
 func DecodeImage(ctx context.Context, r io.Reader, opts ...ReadOption) (Image, string, error) {
-	opts = append(opts, DataDecodeOptions{DecodeData, DiscardData, DiscardData})
-	i, _, _, t, err := DecodeWithOptions(ctx, r, opts...)
+	opts = append(opts, DataDecodeOptions{DecodeData, DiscardData})
+	i, _, t, err := DecodeWithOptions(ctx, r, opts...)
 	return i, t, err
 }
 
@@ -354,8 +350,8 @@ func DecodeImage(ctx context.Context, r io.Reader, opts ...ReadOption) (Image, s
 // it's more efficient to call DecodeWithOption and extract both
 // simiultaneously.
 func DecodeMetadata(ctx context.Context, r io.Reader, opts ...ReadOption) (Metadata, string, error) {
-	opts = append(opts, DataDecodeOptions{DiscardData, DecodeData, DiscardData})
-	_, m, _, t, err := DecodeWithOptions(ctx, r, opts...)
+	opts = append(opts, DataDecodeOptions{DiscardData, DecodeData})
+	_, m, t, err := DecodeWithOptions(ctx, r, opts...)
 	return m, t, err
 
 }
@@ -371,6 +367,9 @@ func DecodeMetadata(ctx context.Context, r io.Reader, opts ...ReadOption) (Metad
 func DecodeConfig(r io.Reader) (Config, string, error) {
 	rr := asReader(r)
 	f := sniff(rr)
-	_, _, c, err := f.decode(context.TODO(), rr, DataDecodeOptions{DiscardData, DiscardData, DecodeData})
-	return c, f.name, err
+	_, m, err := f.decode(context.TODO(), rr, DataDecodeOptions{DiscardData, DeferData})
+	if err != nil {
+		return Config{}, "", err
+	}
+	return m.GetConfig(), f.name, err
 }

@@ -19,10 +19,9 @@ func main() {
 
 	o := image.DataDecodeOptions{
 		DecodeImage:    image.DiscardData,
-		DecodeConfig:   image.DiscardData,
 		DecodeMetadata: image.DecodeData,
 	}
-	_, rm, _, t, err := image.DecodeWithOptions(ctx, os.Stdin, o)
+	_, rm, t, err := image.DecodeWithOptions(ctx, os.Stdin, o)
 	if err != nil {
 		log.Fatalf("Image read failed: %v", err)
 	}

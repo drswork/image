@@ -127,7 +127,7 @@ func readPng(filename string) (image.Image, error) {
 	}
 	defer f.Close()
 	ctx := context.TODO()
-	i, _, _, err := png.DecodeExtended(ctx, f, image.OptionDecodeImage)
+	i, _, err := png.DecodeExtended(ctx, f, image.OptionDecodeImage)
 	return i, err
 }
 
@@ -148,7 +148,7 @@ func TestWriter(t *testing.T) {
 		}
 		// Decode that JPEG.
 		ctx := context.TODO()
-		m1, _, _, err := DecodeExtended(ctx, &buf, image.OptionDecodeImage)
+		m1, _, err := DecodeExtended(ctx, &buf, image.OptionDecodeImage)
 		if err != nil {
 			t.Error(tc.filename, err)
 			continue
@@ -177,7 +177,7 @@ func TestWriteGrayscale(t *testing.T) {
 		t.Fatal(err)
 	}
 	ctx := context.TODO()
-	m1, _, _, err := DecodeExtended(ctx, &buf, image.OptionDecodeImage)
+	m1, _, err := DecodeExtended(ctx, &buf, image.OptionDecodeImage)
 	if err != nil {
 		t.Fatal(err)
 	}

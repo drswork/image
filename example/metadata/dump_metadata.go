@@ -29,7 +29,7 @@ func main() {
 
 	ctx := context.Background()
 
-	_, m, _, t, err := image.DecodeWithOptions(ctx, img)
+	_, m, t, err := image.DecodeWithOptions(ctx, img)
 	if err != nil {
 		log.Fatalf("Unable to decode image file %v, %v", filename, err)
 	}

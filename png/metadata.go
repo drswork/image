@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/drswork/image"
+	"github.com/drswork/image/color"
 	"github.com/drswork/image/metadata"
 )
 
@@ -55,6 +56,13 @@ type Metadata struct {
 	rawIcc  []byte
 	iccName string
 
+	// Width holds the image width, in pixels
+	Width int
+	// Height holds the image height, in pixels
+	Height int
+	// ColorModel holds the color model for this image
+	ColorModel color.Model
+
 	Text []TextEntry
 
 	// LastModified holds the modification timestamp embedded in the PNG
@@ -83,6 +91,15 @@ type Metadata struct {
 // metadata was read from.
 func (m *Metadata) ImageMetadataFormat() string {
 	return "png"
+}
+
+// GetConfig returns the image.Config data extracted from the image's metadata.
+func (m *Metadata) GetConfig() image.Config {
+	return image.Config{
+		Height:     m.Height,
+		Width:      m.Width,
+		ColorModel: m.ColorModel,
+	}
 }
 
 // Exif returns the decoded exif metadata for an image. If there is no

@@ -117,7 +117,7 @@ func TestDecode(t *testing.T) {
 		b.WriteString(trailerStr)
 
 		ctx := context.TODO()
-		got, _, _, err := DecodeExtended(ctx, b, image.OptionDecodeImage)
+		got, _, err := DecodeExtended(ctx, b, image.OptionDecodeImage)
 		if err != tc.wantErr {
 			t.Errorf("nPix=%d, extraExisting=%d, extraSeparate=%d\ngot  %v\nwant %v",
 				tc.nPix, tc.extraExisting, tc.extraSeparate, err, tc.wantErr)
@@ -383,7 +383,7 @@ func TestLoopCount(t *testing.T) {
 func TestTimeout(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.TODO())
 	cancel()
-	_, _, _, err := DecodeExtended(ctx, bytes.NewReader(testGIF))
+	_, _, err := DecodeExtended(ctx, bytes.NewReader(testGIF))
 	if err == nil {
 		t.Errorf("Timeout check failed")
 	}
@@ -392,7 +392,7 @@ func TestTimeout(t *testing.T) {
 func TestUnexpectedEOF(t *testing.T) {
 	ctx := context.TODO()
 	for i := len(testGIF) - 1; i >= 0; i-- {
-		_, _, _, err := DecodeExtended(ctx, bytes.NewReader(testGIF[:i]), image.OptionDecodeImage)
+		_, _, err := DecodeExtended(ctx, bytes.NewReader(testGIF[:i]), image.OptionDecodeImage)
 		if err == errNotEnough {
 			continue
 		}
@@ -428,7 +428,7 @@ func TestDecodeMemoryConsumption(t *testing.T) {
 	defer debug.SetGCPercent(debug.SetGCPercent(5))
 	runtime.ReadMemStats(s0)
 	ctx := context.TODO()
-	if _, _, _, err := DecodeExtended(ctx, buf, image.OptionDecodeImage); err != nil {
+	if _, _, err := DecodeExtended(ctx, buf, image.OptionDecodeImage); err != nil {
 		t.Fatal("Decode:", err)
 	}
 	runtime.ReadMemStats(s1)

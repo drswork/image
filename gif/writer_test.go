@@ -100,7 +100,7 @@ func TestWriter(t *testing.T) {
 			continue
 		}
 		ctx := context.TODO()
-		m1, _, _, err := DecodeExtended(ctx, &buf, image.OptionDecodeImage)
+		m1, _, err := DecodeExtended(ctx, &buf, image.OptionDecodeImage)
 		if err != nil {
 			t.Error(tc.filename, err)
 			continue
@@ -130,7 +130,7 @@ func TestSubImage(t *testing.T) {
 		t.Fatalf("Encode: %v", err)
 	}
 	ctx := context.TODO()
-	m1, _, _, err := DecodeExtended(ctx, &buf, image.OptionDecodeImage)
+	m1, _, err := DecodeExtended(ctx, &buf, image.OptionDecodeImage)
 	if err != nil {
 		t.Fatalf("Decode: %v", err)
 	}
@@ -360,7 +360,7 @@ func TestEncodeNonZeroMinPoint(t *testing.T) {
 			continue
 		}
 		ctx := context.TODO()
-		m, _, _, err := DecodeExtended(ctx, &buf, image.OptionDecodeImage)
+		m, _, err := DecodeExtended(ctx, &buf, image.OptionDecodeImage)
 		if err != nil {
 			t.Errorf("p=%v: Decode: %v", p, err)
 			continue
@@ -391,7 +391,7 @@ func TestEncodeNonZeroMinPoint(t *testing.T) {
 			return
 		}
 		ctx := context.TODO()
-		m, _, _, err := DecodeExtended(ctx, &buf, image.OptionDecodeImage)
+		m, _, err := DecodeExtended(ctx, &buf, image.OptionDecodeImage)
 		if err != nil {
 			t.Errorf("gray-diagonal: Decode: %v", err)
 			return
@@ -589,7 +589,7 @@ func TestEncodeCroppedSubImages(t *testing.T) {
 			continue
 		}
 		ctx := context.TODO()
-		if _, _, _, err := DecodeExtended(ctx, buf, image.OptionDecodeImage); err != nil {
+		if _, _, err := DecodeExtended(ctx, buf, image.OptionDecodeImage); err != nil {
 			t.Errorf("Decode: sr=%v: %v", sr, err)
 		}
 	}
@@ -618,7 +618,7 @@ func TestEncodeWrappedImage(t *testing.T) {
 		t.Fatalf("Encode: %v", err)
 	}
 	ctx := context.TODO()
-	w1, _, _, err := DecodeExtended(ctx, buf, image.OptionDecodeImage)
+	w1, _, err := DecodeExtended(ctx, buf, image.OptionDecodeImage)
 	if err != nil {
 		t.Fatalf("Dencode: %v", err)
 	}
@@ -644,7 +644,7 @@ func TestEncodeWrappedImage(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Encode: %v", err)
 	}
-	w1, _, _, err = DecodeExtended(ctx, buf, image.OptionDecodeImage)
+	w1, _, err = DecodeExtended(ctx, buf, image.OptionDecodeImage)
 	if err != nil {
 		t.Fatalf("Dencode: %v", err)
 	}

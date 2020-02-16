@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/drswork/image"
+	"github.com/drswork/image/color"
 	"github.com/drswork/image/metadata"
 )
 
@@ -25,6 +26,13 @@ type Metadata struct {
 	Comments []string
 	// Extensions is a map that holds any extension data we can't deal with
 	Extensions map[string]*Extension
+
+	// Width holds the image width, in pixels
+	Width int
+	// Height holds the image height, in pixels
+	Height int
+	// ColorModel holds the image color models
+	ColorModel color.Model
 }
 
 // Extension holds the contents of an extension.
@@ -36,6 +44,10 @@ type Extension struct {
 // ImageMetadataFormat returns the image type for this metadata.
 func (m *Metadata) ImageMetadataFormat() string {
 	return "gif"
+}
+
+func (m *Metadata) GetConfig() image.Config {
+	return image.Config{Height: m.Height, Width: m.Width, ColorModel: m.ColorModel}
 }
 
 // Xmp returns the xmp information associated with the metadata

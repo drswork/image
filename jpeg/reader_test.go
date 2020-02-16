@@ -92,7 +92,7 @@ func decodeFile(filename string) (image.Image, error) {
 	}
 	defer f.Close()
 	ctx := context.TODO()
-	i, _, _, err := DecodeExtended(ctx, f, image.OptionDecodeImage)
+	i, _, err := DecodeExtended(ctx, f, image.OptionDecodeImage)
 	return i, err
 }
 
@@ -130,7 +130,7 @@ func TestDecodeEOF(t *testing.T) {
 	ctx := context.TODO()
 	for i := 0; i < n; {
 		r := &eofReader{data[:n-i], data[n-i:], -1}
-		_, _, _, err := DecodeExtended(ctx, r, image.OptionDecodeImage)
+		_, _, err := DecodeExtended(ctx, r, image.OptionDecodeImage)
 		if err != nil {
 			t.Errorf("Decode with Read() = %d, EOF: %v", r.lenAtEOF, err)
 		}
@@ -199,7 +199,7 @@ func TestTimeout(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, _, _, err = DecodeExtended(ctx, bytes.NewReader(b))
+	_, _, err = DecodeExtended(ctx, bytes.NewReader(b))
 	if err == nil {
 		t.Fatalf("Timeout failed")
 	}
@@ -269,7 +269,7 @@ func TestLargeImageWithShortData(t *testing.T) {
 	c := make(chan error, 1)
 	go func() {
 		ctx := context.TODO()
-		_, _, _, err := DecodeExtended(ctx, strings.NewReader(input), image.OptionDecodeImage)
+		_, _, err := DecodeExtended(ctx, strings.NewReader(input), image.OptionDecodeImage)
 		c <- err
 	}()
 	select {
@@ -324,7 +324,7 @@ func TestExtraneousData(t *testing.T) {
 
 		// Check that we can still decode the resultant image.
 		ctx := context.TODO()
-		got, _, _, err := DecodeExtended(ctx, buf, image.OptionDecodeImage)
+		got, _, err := DecodeExtended(ctx, buf, image.OptionDecodeImage)
 		if err != nil {
 			t.Errorf("could not decode image #%d: %v", i, err)
 			nerr++

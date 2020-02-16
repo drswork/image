@@ -1048,4 +1048,23 @@ type Metadata interface {
 	// This is also appropriate for shared metadata structures, such as
 	// XMP or EXIF, which can be applied to multiple image types.
 	ImageMetadataFormat() string
+	GetConfig() Config
+}
+
+// fakeMetadata is a little fake metadata type that holds just enough
+// information for us to stuff a config in. We use this for image
+// format code that hasn't been updated to the new API.
+type fakeMetadata struct {
+	Config *Config
+}
+
+func (m *fakeMetadata) ImageMetadataFormat() string {
+	return "fake"
+}
+
+func (m *fakeMetadata) GetConfig() Config {
+	if m.Config == nil {
+		return Config{}
+	}
+	return *m.Config
 }

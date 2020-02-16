@@ -28,7 +28,7 @@ func ExampleDecode() {
 	// images.  Consider using the general image.DecodeImage as it can
 	// sniff and decode any registered image format.
 	ctx := context.TODO()
-	img, _, _, err := png.DecodeExtended(ctx, gopherPNG(), image.OptionDecodeImage)
+	img, _, err := png.DecodeExtended(ctx, gopherPNG(), image.OptionDecodeImage)
 	if err != nil {
 		log.Fatal(err)
 	}

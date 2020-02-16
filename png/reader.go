@@ -235,6 +235,7 @@ func (d *decoder) parseIHDR(ctx context.Context, length uint32) error {
 		return UnsupportedError(fmt.Sprintf("bit depth %d, color type %d", d.tmp[8], d.tmp[9]))
 	}
 	d.width, d.height = int(w), int(h)
+	d.metadata.Width, d.metadata.Height = int(w), int(h)
 	return d.verifyChecksum()
 }
 
@@ -1049,34 +1050,27 @@ func (d *decoder) checkHeader(ctx context.Context) error {
 	return nil
 }
 
-func DecodeExtended(ctx context.Context, r io.Reader, opts ...image.ReadOption) (image.Image, image.Metadata, image.Config, error) {
+func DecodeExtended(ctx context.Context, r io.Reader, opts ...image.ReadOption) (image.Image, image.Metadata, error) {
 	if len(opts) > 1 {
-		return nil, nil, image.Config{}, errors.New("Too many read options provided")
+		return nil, nil, errors.New("Too many read options provided")
 	}
 	opt := image.DataDecodeOptions{}
 	if len(opts) == 1 {
 		o, ok := opts[0].(image.DataDecodeOptions)
 		if !ok {
-			return nil, nil, image.Config{}, errors.New("Unknown read option type provided")
+			return nil, nil, errors.New("Unknown read option type provided")
 		}
 		opt = o
 	}
 
 	// If they ask for nothing then return nothing. This is currently
 	// not an error.
-	if opt.DecodeImage == image.DiscardData && opt.DecodeMetadata == image.DiscardData && opt.DecodeConfig == image.DiscardData {
-		return nil, nil, image.Config{}, nil
+	if opt.DecodeImage == image.DiscardData && opt.DecodeMetadata == image.DiscardData {
+		return nil, nil, nil
 	}
 
 	if opt.DecodeImage == image.DeferData {
-		return nil, nil, image.Config{}, errors.New("Image parsing may not be deferred")
-	}
-	if opt.DecodeConfig == image.DeferData {
-		return nil, nil, image.Config{}, errors.New("Config parsing may not be deferred")
-	}
-
-	if opt.DecodeConfig == image.DefaultDecodeOption {
-		opt.DecodeConfig = image.DiscardData
+		return nil, nil, errors.New("Image parsing may not be deferred")
 	}
 	if opt.DecodeImage == image.DefaultDecodeOption {
 		opt.DecodeImage = image.DecodeData
@@ -1086,18 +1080,16 @@ func DecodeExtended(ctx context.Context, r io.Reader, opts ...image.ReadOption) 
 	}
 
 	d := &decoder{
-		r:   r,
-		crc: crc32.NewIEEE(),
-	}
-	if opt.DecodeMetadata >= image.DeferData || true {
-		d.metadata = &Metadata{}
+		r:        r,
+		crc:      crc32.NewIEEE(),
+		metadata: &Metadata{},
 	}
 
 	if err := d.checkHeader(ctx); err != nil {
 		if err == io.EOF {
 			err = io.ErrUnexpectedEOF
 		}
-		return nil, nil, image.Config{}, err
+		return nil, nil, err
 	}
 
 	parseImage := false
@@ -1114,38 +1106,29 @@ func DecodeExtended(ctx context.Context, r io.Reader, opts ...image.ReadOption) 
 			if err == io.EOF {
 				err = io.ErrUnexpectedEOF
 			}
-			return nil, nil, image.Config{}, err
+			return nil, nil, err
 		}
 	}
 
-	c := image.Config{}
-	if opt.DecodeConfig == image.DecodeData {
-		var cm color.Model
-		switch d.cb {
-		case cbG1, cbG2, cbG4, cbG8:
-			cm = color.GrayModel
-		case cbGA8:
-			cm = color.NRGBAModel
-		case cbTC8:
-			cm = color.RGBAModel
-		case cbP1, cbP2, cbP4, cbP8:
-			cm = d.palette
-		case cbTCA8:
-			cm = color.NRGBAModel
-		case cbG16:
-			cm = color.Gray16Model
-		case cbGA16:
-			cm = color.NRGBA64Model
-		case cbTC16:
-			cm = color.RGBA64Model
-		case cbTCA16:
-			cm = color.NRGBA64Model
-		}
-		c = image.Config{
-			ColorModel: cm,
-			Width:      d.width,
-			Height:     d.height,
-		}
+	switch d.cb {
+	case cbG1, cbG2, cbG4, cbG8:
+		d.metadata.ColorModel = color.GrayModel
+	case cbGA8:
+		d.metadata.ColorModel = color.NRGBAModel
+	case cbTC8:
+		d.metadata.ColorModel = color.RGBAModel
+	case cbP1, cbP2, cbP4, cbP8:
+		d.metadata.ColorModel = d.palette
+	case cbTCA8:
+		d.metadata.ColorModel = color.NRGBAModel
+	case cbG16:
+		d.metadata.ColorModel = color.Gray16Model
+	case cbGA16:
+		d.metadata.ColorModel = color.NRGBA64Model
+	case cbTC16:
+		d.metadata.ColorModel = color.RGBA64Model
+	case cbTCA16:
+		d.metadata.ColorModel = color.NRGBA64Model
 	}
 
 	// We read in all the metadata without decoding the expensive
@@ -1153,43 +1136,42 @@ func DecodeExtended(ctx context.Context, r io.Reader, opts ...image.ReadOption) 
 	if opt.DecodeMetadata == image.DecodeData {
 		_, err := d.metadata.EXIF(ctx, opts...)
 		if err != nil {
-			return nil, nil, image.Config{}, err
+			return nil, nil, err
 		}
 		_, err = d.metadata.XMP(ctx, opts...)
 		if err != nil {
-			return nil, nil, image.Config{}, err
+			return nil, nil, err
 		}
 		_, err = d.metadata.ICC(ctx, opts...)
 		if err != nil {
-			return nil, nil, image.Config{}, err
+			return nil, nil, err
 		}
 	}
 
-	return d.img, d.metadata, c, nil
+	return d.img, d.metadata, nil
 
 }
 
 // Decode reads a PNG image from r and returns it as an image.Image.
 // The type of Image returned depends on the PNG contents.
+//
+// Note this function is deprecated. Use DecodeExtended instead.
 func Decode(r io.Reader) (image.Image, error) {
-
-	i, _, _, err := DecodeExtended(context.TODO(), r, image.DataDecodeOptions{
+	i, _, err := DecodeExtended(context.TODO(), r, image.DataDecodeOptions{
 		DecodeImage:    image.DecodeData,
 		DecodeMetadata: image.DiscardData,
-		DecodeConfig:   image.DiscardData,
 	})
 	return i, err
 }
 
 // DecodeConfig returns the color model and dimensions of a PNG image without
-// decoding the entire image.
+// decoding the entire image. Note this function is deprecated. Use DecodeExtended and fetch the config from the metadata object instead.
 func DecodeConfig(r io.Reader) (image.Config, error) {
-	_, _, c, err := DecodeExtended(context.TODO(), r, image.DataDecodeOptions{
+	_, m, err := DecodeExtended(context.TODO(), r, image.DataDecodeOptions{
 		DecodeImage:    image.DiscardData,
-		DecodeMetadata: image.DiscardData,
-		DecodeConfig:   image.DecodeData,
+		DecodeMetadata: image.DecodeData,
 	})
-	return c, err
+	return m.GetConfig(), err
 
 }
 

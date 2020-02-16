@@ -15,7 +15,7 @@ func main() {
 
 	// Read in the image. Apply any rotation, gamma, and color
 	// correction transformations that may be noted in the metadata.
-	_, _, _, _, err := image.DecodeWithOptions(ctx, os.Stdin, image.ImageTransformOptions{
+	_, _, _, err := image.DecodeWithOptions(ctx, os.Stdin, image.ImageTransformOptions{
 		RotationTransform: image.ForwardImageTransform,
 		ColorTransform:    image.ForwardImageTransform,
 		GammaTransform:    image.ForwardImageTransform,

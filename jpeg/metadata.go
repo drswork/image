@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/drswork/image"
+	"github.com/drswork/image/color"
 	"github.com/drswork/image/metadata"
 )
 
@@ -47,10 +48,21 @@ type Metadata struct {
 	// this cache.
 	rawIcc  []byte
 	iccName string
+
+	// Width holds the image width, in pixels
+	Width int
+	// Height holds the image height, in pixels
+	Height int
+	// ColorModel holds the image color model
+	ColorModel color.Model
 }
 
 func (m *Metadata) ImageMetadataFormat() string {
 	return "jpeg"
+}
+
+func (m *Metadata) GetConfig() image.Config {
+	return image.Config{ColorModel: m.ColorModel, Height: m.Height, Width: m.Width}
 }
 
 // Exif returns the decoded exif metadata for an image. If there is no

@@ -5,10 +5,11 @@ package main
 import (
 	"context"
 	"fmt"
-	"github.com/drswork/image"
 	"log"
 	"os"
 	"time"
+
+	"github.com/drswork/image"
 )
 
 func main() {
@@ -17,7 +18,7 @@ func main() {
 
 	// Read the image with our 3ms timeout. If it takes longer than that
 	// to read then the decode will fail with an error.
-	_, _, _, t, err := image.DecodeWithOptions(ctx, os.Stdin)
+	_, _, t, err := image.DecodeWithOptions(ctx, os.Stdin)
 	if err != nil {
 		log.Fatalf("Image read failed: %v", err)
 	}

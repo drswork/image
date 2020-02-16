@@ -437,7 +437,7 @@ func TestPaletted(t *testing.T) {
 	}
 	defer f.Close()
 	ctx := context.TODO()
-	src, _, _, err := png.DecodeExtended(ctx, f, image.OptionDecodeImage)
+	src, _, err := png.DecodeExtended(ctx, f, image.OptionDecodeImage)
 	if err != nil {
 		t.Fatalf("decode: %v", err)
 	}

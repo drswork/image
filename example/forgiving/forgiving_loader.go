@@ -24,7 +24,7 @@ func main() {
 
 	// Read in the image. If it's more than 10M decoded then the image
 	// decode will fail with an error.
-	_, _, _, t, initialErr := image.DecodeWithOptions(ctx, fh)
+	_, _, t, initialErr := image.DecodeWithOptions(ctx, fh)
 	if initialErr == nil {
 		return
 	}
@@ -34,7 +34,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("Can't seek back to beginning, %v", err)
 	}
-	_, _, _, t, err = image.DecodeWithOptions(ctx, fh,
+	_, _, t, err = image.DecodeWithOptions(ctx, fh,
 		image.DamageHandlingOptions{
 			AllowTrailingData:   true,
 			SkipDamagedData:     true,

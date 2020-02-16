@@ -568,35 +568,29 @@ func uninterlace(m *image.Paletted) {
 type ReadOption struct {
 }
 
-func DecodeExtended(ctx context.Context, r io.Reader, opts ...image.ReadOption) (image.Image, image.Metadata, image.Config, error) {
+func DecodeExtended(ctx context.Context, r io.Reader, opts ...image.ReadOption) (image.Image, image.Metadata, error) {
 	if len(opts) > 1 {
-		return nil, nil, image.Config{}, errors.New("Too many read options provided")
+		return nil, nil, errors.New("Too many read options provided")
 	}
 	opt := image.DataDecodeOptions{}
 	if len(opts) == 1 {
 		o, ok := opts[0].(image.DataDecodeOptions)
 		if !ok {
-			return nil, nil, image.Config{}, errors.New("Unknown read option type provided")
+			return nil, nil, errors.New("Unknown read option type provided")
 		}
 		opt = o
 	}
 
 	// If they ask for nothing then return nothing. This is currently
 	// not an error.
-	if opt.DecodeImage == image.DiscardData && opt.DecodeMetadata == image.DiscardData && opt.DecodeConfig == image.DiscardData {
-		return nil, nil, image.Config{}, nil
+	if opt.DecodeImage == image.DiscardData && opt.DecodeMetadata == image.DiscardData {
+		return nil, nil, nil
 	}
 
 	if opt.DecodeImage == image.DeferData {
-		return nil, nil, image.Config{}, errors.New("Image parsing may not be deferred")
-	}
-	if opt.DecodeConfig == image.DeferData {
-		return nil, nil, image.Config{}, errors.New("Config parsing may not be deferred")
+		return nil, nil, errors.New("Image parsing may not be deferred")
 	}
 
-	if opt.DecodeConfig == image.DefaultDecodeOption {
-		opt.DecodeConfig = image.DiscardData
-	}
 	if opt.DecodeImage == image.DefaultDecodeOption {
 		opt.DecodeImage = image.DecodeData
 	}
@@ -614,43 +608,34 @@ func DecodeExtended(ctx context.Context, r io.Reader, opts ...image.ReadOption) 
 	}
 
 	var d decoder
-	if opt.DecodeMetadata >= image.DeferData || true {
-		d.metadata = &Metadata{}
-	}
+	d.metadata = &Metadata{}
 
 	if err := d.decode(ctx, r, false, false, parseImage, parseMetadata); err != nil {
-		return nil, nil, image.Config{}, err
+		return nil, nil, err
 	}
 
-	c := image.Config{}
-	if opt.DecodeConfig == image.DecodeData {
-		c = image.Config{
-			ColorModel: d.globalColorTable,
-			Width:      d.width,
-			Height:     d.height,
-		}
-
-	}
+	d.metadata.Width = d.width
+	d.metadata.Height = d.height
+	d.metadata.ColorModel = d.globalColorTable
 
 	// We read in all the metadata without decoding the expensive
 	// stuff. If the user wanted it decoded now then go decode it.
 	if opt.DecodeMetadata == image.DecodeData {
 		_, err := d.metadata.XMP(ctx, opts...)
 		if err != nil {
-			return nil, nil, image.Config{}, err
+			return nil, nil, err
 		}
 	}
 
-	return d.image[0], d.metadata, c, nil
+	return d.image[0], d.metadata, nil
 }
 
 // Decode reads a GIF image from r and returns the first embedded
 // image as an image.Image.
 func Decode(r io.Reader) (image.Image, error) {
-	i, _, _, err := DecodeExtended(context.TODO(), r, image.DataDecodeOptions{
+	i, _, err := DecodeExtended(context.TODO(), r, image.DataDecodeOptions{
 		DecodeImage:    image.DecodeData,
 		DecodeMetadata: image.DiscardData,
-		DecodeConfig:   image.DiscardData,
 	})
 	return i, err
 
@@ -711,12 +696,14 @@ func DecodeAll(r io.Reader) (*GIF, error) {
 // DecodeConfig returns the global color model and dimensions of a GIF image
 // without decoding the entire image.
 func DecodeConfig(r io.Reader) (image.Config, error) {
-	_, _, c, err := DecodeExtended(context.TODO(), r, image.DataDecodeOptions{
+	_, m, err := DecodeExtended(context.TODO(), r, image.DataDecodeOptions{
 		DecodeImage:    image.DiscardData,
-		DecodeMetadata: image.DiscardData,
-		DecodeConfig:   image.DecodeData,
+		DecodeMetadata: image.DecodeData,
 	})
-	return c, err
+	if err != nil {
+		return image.Config{}, err
+	}
+	return m.GetConfig(), err
 
 }
 

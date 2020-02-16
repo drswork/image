@@ -78,7 +78,7 @@ func readPNG(ctx context.Context, filename string) (image.Image, error) {
 		return nil, err
 	}
 	defer f.Close()
-	img, _, _, err := DecodeExtended(ctx, f)
+	img, _, err := DecodeExtended(ctx, f)
 	return img, err
 }
 
@@ -444,15 +444,18 @@ func TestPalettedDecodeConfig(t *testing.T) {
 			continue
 		}
 		defer f.Close()
-		_, _, cfg, err := DecodeExtended(context.TODO(), f, image.DataDecodeOptions{
+		_, m, err := DecodeExtended(context.TODO(), f, image.DataDecodeOptions{
 			DecodeImage:    image.DiscardData,
-			DecodeMetadata: image.DiscardData,
-			DecodeConfig:   image.DecodeData,
+			DecodeMetadata: image.DecodeData,
 		})
 		if err != nil {
 			t.Errorf("%s: %v", fn, err)
 			continue
 		}
+		if m == nil {
+			t.Fatalf("m == nil!")
+		}
+		cfg := m.GetConfig()
 		pal, ok := cfg.ColorModel.(color.Palette)
 		if !ok {
 			t.Errorf("%s: expected paletted color model", fn)
@@ -482,10 +485,9 @@ func TestSkipImage(t *testing.T) {
 		t.Fatalf("Unable to open test file: %v", filename)
 	}
 	defer f.Close()
-	_, _, _, err = DecodeExtended(ctx, f, image.DataDecodeOptions{
+	_, _, err = DecodeExtended(ctx, f, image.DataDecodeOptions{
 		DecodeImage:    image.DiscardData,
 		DecodeMetadata: image.DecodeData,
-		DecodeConfig:   image.DiscardData,
 	})
 	if err != nil {
 		t.Fatalf("Image-free decode failed: %v", err)
@@ -515,7 +517,7 @@ func TestIncompleteIDATOnRowBoundary(t *testing.T) {
 		idat = "\x00\x00\x00\x0eIDAT\x78\x9c\x62\x62\x00\x04\x00\x00\xff\xff\x00\x06\x00\x03\xfa\xd0\x59\xae"
 		iend = "\x00\x00\x00\x00IEND\xae\x42\x60\x82"
 	)
-	_, _, _, err := DecodeExtended(context.TODO(), strings.NewReader(pngHeader+ihdr+idat+iend), image.OptionDecodeImage)
+	_, _, err := DecodeExtended(context.TODO(), strings.NewReader(pngHeader+ihdr+idat+iend), image.OptionDecodeImage)
 	if err == nil {
 		t.Fatal("got nil error, want non-nil")
 	}
@@ -530,7 +532,7 @@ func TestTrailingIDATChunks(t *testing.T) {
 		idatZero  = "\x00\x00\x00\x00IDAT\x35\xaf\x06\x1e"
 		iend      = "\x00\x00\x00\x00IEND\xae\x42\x60\x82"
 	)
-	_, _, _, err := DecodeExtended(context.TODO(), strings.NewReader(pngHeader+ihdr+idatWhite+idatZero+iend), image.OptionDecodeImage)
+	_, _, err := DecodeExtended(context.TODO(), strings.NewReader(pngHeader+ihdr+idatWhite+idatZero+iend), image.OptionDecodeImage)
 	if err != nil {
 		t.Fatalf("decoding valid image: %v", err)
 	}
@@ -539,7 +541,7 @@ func TestTrailingIDATChunks(t *testing.T) {
 	// The following chunk contains a single pixel with color.Gray{0}.
 	const idatBlack = "\x00\x00\x00\x0eIDAT\x78\x9c\x62\x62\x00\x04\x00\x00\xff\xff\x00\x06\x00\x03\xfa\xd0\x59\xae"
 
-	img, _, _, err := DecodeExtended(context.TODO(), strings.NewReader(pngHeader+ihdr+idatWhite+idatBlack+iend), image.OptionDecodeImage)
+	img, _, err := DecodeExtended(context.TODO(), strings.NewReader(pngHeader+ihdr+idatWhite+idatBlack+iend), image.OptionDecodeImage)
 	if err != nil {
 		t.Fatalf("trailing IDAT not ignored: %v", err)
 	}
@@ -580,7 +582,7 @@ func TestMultipletRNSChunks(t *testing.T) {
 		b = append(b, iend...)
 
 		var want color.Color
-		m, _, _, err := DecodeExtended(context.TODO(), bytes.NewReader(b), image.OptionDecodeImage)
+		m, _, err := DecodeExtended(context.TODO(), bytes.NewReader(b), image.OptionDecodeImage)
 		switch i {
 		case 0:
 			if err != nil {
@@ -612,7 +614,7 @@ func TestUnknownChunkLengthUnderflow(t *testing.T) {
 		0xd3, 0x11, 0x9a, 0x73, 0x00, 0x00, 0xf8, 0x1e, 0xf3, 0x2e, 0x00, 0x00,
 		0x01, 0x00, 0xff, 0xff, 0xff, 0xff, 0x07, 0xf4, 0x7c, 0x55, 0x04, 0x1a,
 		0xd3}
-	_, _, _, err := DecodeExtended(context.TODO(), bytes.NewReader(data), image.OptionDecodeImage)
+	_, _, err := DecodeExtended(context.TODO(), bytes.NewReader(data), image.OptionDecodeImage)
 	if err == nil {
 		t.Errorf("Didn't fail reading an unknown chunk with length 0xffffffff")
 	}
@@ -635,7 +637,7 @@ func TestPaletted8OutOfRangePixel(t *testing.T) {
 
 func TestGray8Transparent(t *testing.T) {
 	// These bytes come from https://golang.org/issues/19553
-	m, _, _, err := DecodeExtended(context.TODO(), bytes.NewReader([]byte{
+	m, _, err := DecodeExtended(context.TODO(), bytes.NewReader([]byte{
 		0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d, 0x49, 0x48, 0x44, 0x52,
 		0x00, 0x00, 0x00, 0x0f, 0x00, 0x00, 0x00, 0x0b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x85, 0x2c, 0x88,
 		0x80, 0x00, 0x00, 0x00, 0x02, 0x74, 0x52, 0x4e, 0x53, 0x00, 0xff, 0x5b, 0x91, 0x22, 0xb5, 0x00,
@@ -700,7 +702,7 @@ func TestDimensionOverflow(t *testing.T) {
 	// It encodes a 2147483646 × 2147483646 (i.e. 0x7ffffffe × 0x7ffffffe)
 	// NRGBA image. The (width × height) per se doesn't overflow an int64, but
 	// (width × height × bytesPerPixel) will.
-	_, _, _, err := DecodeExtended(context.TODO(), bytes.NewReader([]byte{
+	_, _, err := DecodeExtended(context.TODO(), bytes.NewReader([]byte{
 		0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d, 0x49, 0x48, 0x44, 0x52,
 		0x7f, 0xff, 0xff, 0xfe, 0x7f, 0xff, 0xff, 0xfe, 0x08, 0x06, 0x00, 0x00, 0x00, 0x30, 0x57, 0xb3,
 		0xfd, 0x00, 0x00, 0x00, 0x15, 0x49, 0x44, 0x41, 0x54, 0x78, 0x9c, 0x62, 0x62, 0x20, 0x12, 0x8c,

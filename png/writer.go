@@ -557,6 +557,28 @@ func (e *encoder) maybeWriteTIME(m *Metadata) {
 	return
 }
 
+// maybeWriteTEXT will write out any tEXt entries we have.
+func (e *encoder) maybeWriteTEXT(t *TextEntry) {
+	if e.err != nil {
+		return
+	}
+
+	if t.EntryType != EtText {
+		return
+	}
+
+	copy(e.tmp[:len(t.Key)], []byte(t.Key))
+	e.tmp[len(t.Key)] = 0
+	length := len(t.Key) + 1
+	if len(t.Value) != 0 {
+		length += len(t.Value)
+		copy(e.tmp[len(t.Key)+1:], []byte(t.Value))
+	}
+
+	e.writeChunk(e.tmp[:length], "tEXt")
+	return
+}
+
 // maybeWriteSRGB will write out a sRGB chunk if the metadata has
 // sRGB information.
 func (e *encoder) maybeWriteSRGB(m *Metadata) {
@@ -733,10 +755,16 @@ func (enc *Encoder) EncodeExtended(ctx context.Context, w io.Writer, m image.Ima
 	e.writeIHDR()
 
 	// If we have a gAMA chunk then it needs to be written now.
-	e.maybeWriteGAMA(metadata)
-	e.maybeWriteCHRM(metadata)
-	e.maybeWriteSRGB(metadata)
-	e.maybeWriteTIME(metadata)
+	if metadata != nil {
+		e.maybeWriteGAMA(metadata)
+		e.maybeWriteCHRM(metadata)
+		e.maybeWriteSRGB(metadata)
+		e.maybeWriteTIME(metadata)
+
+		for _, v := range metadata.Text {
+			e.maybeWriteTEXT(v)
+		}
+	}
 
 	if pal != nil {
 		e.writePLTEAndTRNS(pal)

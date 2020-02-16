@@ -63,7 +63,7 @@ type Metadata struct {
 	// ColorModel holds the color model for this image
 	ColorModel color.Model
 
-	Text []TextEntry
+	Text []*TextEntry
 
 	// LastModified holds the modification timestamp embedded in the PNG
 	// image.
@@ -238,7 +238,7 @@ type TextEntry struct {
 }
 
 // String generates a human readable version of a text entry.
-func (e TextEntry) String() string {
+func (e *TextEntry) String() string {
 	return fmt.Sprintf("key: %q, type %v, value %q", e.Key, e.EntryType, e.Value)
 }
 
@@ -348,7 +348,7 @@ func (d *decoder) parseTEXT(ctx context.Context, length uint32) error {
 	if sep+1 >= int(length) {
 		val = string(d.tmp[sep+1 : length])
 	}
-	d.metadata.Text = append(d.metadata.Text, TextEntry{key, val, EtText, "", ""})
+	d.metadata.Text = append(d.metadata.Text, &TextEntry{key, val, EtText, "", ""})
 
 	return d.verifyChecksum()
 }
@@ -364,7 +364,7 @@ func (d *decoder) parseZTXT(ctx context.Context, length uint32) error {
 		return err
 	}
 
-	d.metadata.Text = append(d.metadata.Text, TextEntry{key, val, EtZtext, "", ""})
+	d.metadata.Text = append(d.metadata.Text, &TextEntry{key, val, EtZtext, "", ""})
 
 	return d.verifyChecksum()
 }
@@ -381,7 +381,7 @@ func (d *decoder) parseITXT(ctx context.Context, length uint32) error {
 		return err
 	}
 
-	d.metadata.Text = append(d.metadata.Text, TextEntry{key, val, EtUtext, lang, transkey})
+	d.metadata.Text = append(d.metadata.Text, &TextEntry{key, val, EtUtext, lang, transkey})
 
 	return d.verifyChecksum()
 }

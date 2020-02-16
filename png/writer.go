@@ -7,7 +7,9 @@ package png
 import (
 	"bufio"
 	"compress/zlib"
+	"context"
 	"encoding/binary"
+	"fmt"
 	"hash/crc32"
 	"io"
 	"strconv"
@@ -518,6 +520,47 @@ func (e *encoder) writeImage(w io.Writer, m image.Image, cb int, level int) erro
 	return nil
 }
 
+// maybeWriteGAMA will write out a gAMA chunk if the metadata has
+// gamma information.
+func (e *encoder) maybeWriteGAMA(m *Metadata) {
+	// If we have no metadata, or we do but the gamma bit is empty, then
+	// just bail.
+	if m == nil || m.Gamma == nil {
+		return
+	}
+	if e.err != nil {
+		return
+	}
+
+	binary.BigEndian.PutUint32(e.tmp[:4], *m.Gamma)
+	e.writeChunk(e.tmp[:4], "gAMA")
+	return
+}
+
+// maybeWriteCHRM will write out a cHRM chunk if the metadata has
+// chroma information.
+func (e *encoder) maybeWriteCHRM(m *Metadata) {
+	// If we have no metadata, or we do but the gamma bit is empty, then
+	// just bail.
+	if m == nil || m.Chroma == nil {
+		return
+	}
+	if e.err != nil {
+		return
+	}
+
+	binary.BigEndian.PutUint32(e.tmp[:4], m.Chroma.WhiteX)
+	binary.BigEndian.PutUint32(e.tmp[4:8], m.Chroma.WhiteY)
+	binary.BigEndian.PutUint32(e.tmp[8:12], m.Chroma.RedX)
+	binary.BigEndian.PutUint32(e.tmp[12:16], m.Chroma.RedY)
+	binary.BigEndian.PutUint32(e.tmp[16:20], m.Chroma.GreenX)
+	binary.BigEndian.PutUint32(e.tmp[20:24], m.Chroma.GreenY)
+	binary.BigEndian.PutUint32(e.tmp[24:28], m.Chroma.BlueX)
+	binary.BigEndian.PutUint32(e.tmp[28:32], m.Chroma.BlueY)
+	e.writeChunk(e.tmp[:32], "cHRM")
+	return
+}
+
 // Write the actual image data to one or more IDAT chunks.
 func (e *encoder) writeIDATs() {
 	if e.err != nil {
@@ -563,6 +606,31 @@ func Encode(w io.Writer, m image.Image) error {
 
 // Encode writes the Image m to w in PNG format.
 func (enc *Encoder) Encode(w io.Writer, m image.Image) error {
+	return enc.EncodeExtended(context.TODO(), w, m)
+}
+
+// EncodeExtended writes the Image m to w in PNG format
+func (enc *Encoder) EncodeExtended(ctx context.Context, w io.Writer, m image.Image, opts ...image.WriteOption) error {
+	var metadata *Metadata
+
+	//  Run through all the opts.
+	for _, o := range opts {
+		switch lo := o.(type) {
+		case image.MetadataWriteOption:
+			var ok bool
+			metadata, ok = lo.Metadata.(*Metadata)
+			if !ok {
+				return fmt.Errorf("Metadata of type %T given to PNG encoder", lo.Metadata)
+			}
+			// Make sure the metadata is OK.
+			if err := metadata.validateMetadata(); err != nil {
+				return err
+			}
+		default:
+			return fmt.Errorf("Unknown write option of type %T given", o)
+		}
+	}
+
 	// Obviously, negative widths and heights are invalid. Furthermore, the PNG
 	// spec section 11.2.2 says that zero is invalid. Excessively large images are
 	// also rejected.
@@ -626,10 +694,19 @@ func (enc *Encoder) Encode(w io.Writer, m image.Image) error {
 
 	_, e.err = io.WriteString(w, pngHeader)
 	e.writeIHDR()
+	// If we have a gAMA chunk then it needs to be written now.
+	e.maybeWriteGAMA(metadata)
+	e.maybeWriteCHRM(metadata)
+
 	if pal != nil {
 		e.writePLTEAndTRNS(pal)
 	}
 	e.writeIDATs()
+
+	// If we have metadata then go write it out.
+	if metadata != nil {
+
+	}
 	e.writeIEND()
 	return e.err
 }

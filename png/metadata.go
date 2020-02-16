@@ -700,3 +700,8 @@ func readData(ctx context.Context, d *decoder, length uint32) ([]byte, error) {
 	d.crc.Write(tb)
 	return tb, nil
 }
+
+func (m *Metadata) validateMetadata() error {
+
+	return nil
+}

@@ -537,6 +537,23 @@ func (e *encoder) maybeWriteGAMA(m *Metadata) {
 	return
 }
 
+// maybeWriteSRGB will write out a sRGB chunk if the metadata has
+// sRGB information.
+func (e *encoder) maybeWriteSRGB(m *Metadata) {
+	// If we have no metadata, or we do but the sRGB intent bit is
+	// empty, then just bail.
+	if m == nil || m.SRGBIntent == nil {
+		return
+	}
+	if e.err != nil {
+		return
+	}
+
+	e.tmp[0] = byte(*m.SRGBIntent)
+	e.writeChunk(e.tmp[:1], "sRGB")
+	return
+}
+
 // maybeWriteCHRM will write out a cHRM chunk if the metadata has
 // chroma information.
 func (e *encoder) maybeWriteCHRM(m *Metadata) {
@@ -697,6 +714,7 @@ func (enc *Encoder) EncodeExtended(ctx context.Context, w io.Writer, m image.Ima
 	// If we have a gAMA chunk then it needs to be written now.
 	e.maybeWriteGAMA(metadata)
 	e.maybeWriteCHRM(metadata)
+	e.maybeWriteSRGB(metadata)
 
 	if pal != nil {
 		e.writePLTEAndTRNS(pal)

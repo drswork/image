@@ -276,7 +276,7 @@ type SignificantBits struct {
 }
 
 // SRGBIntent is the rendering intent as defined by the ICC.
-type SRGBIntent int
+type SRGBIntent uint8
 
 const (
 	SIPerceptual SRGBIntent = iota

@@ -537,6 +537,26 @@ func (e *encoder) maybeWriteGAMA(m *Metadata) {
 	return
 }
 
+// maybeWriteTIME will write out a tIME chunk if the metadata has time
+// information. This is the last modified time, and per the spec isn't
+// the image creation time. It feels like maybe this should be set on
+// write if it doesn't exist, but we'll leave that decision for later.
+func (e *encoder) maybeWriteTIME(m *Metadata) {
+	if e.err != nil || m == nil || m.LastModified == nil {
+		return
+	}
+
+	binary.BigEndian.PutUint16(e.tmp[:2], uint16(m.LastModified.Year()))
+	e.tmp[2] = byte(m.LastModified.Month())
+	e.tmp[3] = byte(m.LastModified.Day())
+	e.tmp[4] = byte(m.LastModified.Hour())
+	e.tmp[5] = byte(m.LastModified.Minute())
+	e.tmp[6] = byte(m.LastModified.Second())
+
+	e.writeChunk(e.tmp[:7], "tIME")
+	return
+}
+
 // maybeWriteSRGB will write out a sRGB chunk if the metadata has
 // sRGB information.
 func (e *encoder) maybeWriteSRGB(m *Metadata) {
@@ -711,20 +731,18 @@ func (enc *Encoder) EncodeExtended(ctx context.Context, w io.Writer, m image.Ima
 
 	_, e.err = io.WriteString(w, pngHeader)
 	e.writeIHDR()
+
 	// If we have a gAMA chunk then it needs to be written now.
 	e.maybeWriteGAMA(metadata)
 	e.maybeWriteCHRM(metadata)
 	e.maybeWriteSRGB(metadata)
+	e.maybeWriteTIME(metadata)
 
 	if pal != nil {
 		e.writePLTEAndTRNS(pal)
 	}
 	e.writeIDATs()
 
-	// If we have metadata then go write it out.
-	if metadata != nil {
-
-	}
 	e.writeIEND()
 	return e.err
 }

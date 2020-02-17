@@ -546,12 +546,14 @@ func (e *encoder) maybeWriteTIME(m *Metadata) {
 		return
 	}
 
-	binary.BigEndian.PutUint16(e.tmp[:2], uint16(m.LastModified.Year()))
-	e.tmp[2] = byte(m.LastModified.Month())
-	e.tmp[3] = byte(m.LastModified.Day())
-	e.tmp[4] = byte(m.LastModified.Hour())
-	e.tmp[5] = byte(m.LastModified.Minute())
-	e.tmp[6] = byte(m.LastModified.Second())
+	utc := m.LastModified.UTC()
+
+	binary.BigEndian.PutUint16(e.tmp[:2], uint16(utc.Year()))
+	e.tmp[2] = byte(utc.Month())
+	e.tmp[3] = byte(utc.Day())
+	e.tmp[4] = byte(utc.Hour())
+	e.tmp[5] = byte(utc.Minute())
+	e.tmp[6] = byte(utc.Second())
 
 	e.writeChunk(e.tmp[:7], "tIME")
 	return

@@ -15,6 +15,7 @@ import (
 	"os"
 	"reflect"
 	"testing"
+	"time"
 
 	"github.com/drswork/image"
 	"github.com/drswork/image/color"
@@ -181,6 +182,27 @@ func readPNGExtended(ctx context.Context, filename string) (image.Image, image.M
 }
 
 func TestMetadataWriting(t *testing.T) {
+	ctx := context.TODO()
+	name := filenames[0]
+	qfn := "testdata/pngsuite/" + name + ".png"
+	i, _, err := readPNGExtended(ctx, qfn)
+	var m *Metadata
+
+	m = &Metadata{}
+	tm := time.Now().Round(time.Second).UTC()
+	m.LastModified = &tm
+	_, sm, err := extendedEncodeDecode(i, m)
+	if err != nil {
+		t.Errorf("Metadata round trip error: %v", err)
+	}
+	err = diffMetadata(m, sm.(*Metadata))
+	if err != nil {
+		t.Error(name, err)
+	}
+
+}
+
+func TestMetadataRoundTrip(t *testing.T) {
 	// The filenames variable is declared in reader_test.go.
 	names := filenames
 	if testing.Short() {

@@ -188,12 +188,47 @@ func TestMetadataWriting(t *testing.T) {
 	i, _, err := readPNGExtended(ctx, qfn)
 	var m *Metadata
 
+	// Test that time round-trips OK.
 	m = &Metadata{}
 	tm := time.Now().Round(time.Second).UTC()
 	m.LastModified = &tm
 	_, sm, err := extendedEncodeDecode(i, m)
 	if err != nil {
-		t.Errorf("Metadata round trip error: %v", err)
+		t.Errorf("Metadata time round trip error: %v", err)
+	}
+	err = diffMetadata(m, sm.(*Metadata))
+	if err != nil {
+		t.Error(name, err)
+	}
+
+	m = &Metadata{}
+	// All the values are shifted around to catch issues where we have
+	// offsets wrong or byte swap incorrectly.
+	m.Chroma = &Chroma{
+		WhiteX: 0x01234567,
+		WhiteY: 0x89abcdef,
+		RedX:   0x456789ab,
+		RedY:   0xcdef0123,
+		GreenX: 0x789abcde,
+		GreenY: 0xf0123456,
+		BlueX:  0x23456789,
+		BlueY:  0xabcdef01,
+	}
+	_, sm, err = extendedEncodeDecode(i, m)
+	if err != nil {
+		t.Errorf("Metadata chroma round trip error: %v", err)
+	}
+	err = diffMetadata(m, sm.(*Metadata))
+	if err != nil {
+		t.Error(name, err)
+	}
+
+	m = &Metadata{}
+	gamma := uint32(0xdead)
+	m.Gamma = &gamma
+	_, sm, err = extendedEncodeDecode(i, m)
+	if err != nil {
+		t.Errorf("Metadata gamma round trip error: %v", err)
 	}
 	err = diffMetadata(m, sm.(*Metadata))
 	if err != nil {

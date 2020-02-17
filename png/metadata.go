@@ -346,7 +346,7 @@ func (d *decoder) parseTEXT(ctx context.Context, length uint32) error {
 	key := string(d.tmp[:sep])
 	val := ""
 	// We require a null at the end of the key, but the value might be empty.
-	if sep+1 >= int(length) {
+	if sep+1 <= int(length) {
 		val = string(d.tmp[sep+1 : length])
 	}
 	d.metadata.Text = append(d.metadata.Text, &TextEntry{key, val, EtText, "", ""})
@@ -703,6 +703,31 @@ func readData(ctx context.Context, d *decoder, length uint32) ([]byte, error) {
 }
 
 func (m *Metadata) validateMetadata() error {
+	// Validate that the ICC profile name is valid.
+	// Must be < 80 characters
+	if len(m.iccName) > 79 {
+		return fmt.Errorf("Invalid length for ICC color profile name")
+	}
+	// Has to be set to something if there's a color profile.
+	if len(m.iccName) == 0 && (len(m.rawIcc) > 0 || m.icc != nil) {
+		return fmt.Errorf("Empty ICC color profile name")
+	}
+	// Can't have invalid characters.
+	if len(m.iccName) > 0 {
+		for _, c := range m.iccName {
+			if c < 32 || c > 255 || (c >= 127 && c <= 160) {
+				return fmt.Errorf("Invalid character %v found in icc name", c)
+			}
+		}
+		// No leading or trailing spaces
+		if m.iccName[0] == ' ' || m.iccName[len(m.iccName)-1] == ' ' {
+			return fmt.Errorf("ICC names may not start or end with spaces")
+		}
+
+		if strings.Contains(m.iccName, "  ") {
+			return fmt.Errorf("ICC names may not have multiple consecutive spaces in them")
+		}
+	}
 
 	// Validate the text entries a little. Keys can't contain nulls and
 	// must be between 1 and 79 bytes long.

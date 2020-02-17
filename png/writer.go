@@ -6,6 +6,7 @@ package png
 
 import (
 	"bufio"
+	"bytes"
 	"compress/zlib"
 	"context"
 	"encoding/binary"
@@ -565,15 +566,40 @@ func (e *encoder) maybeWriteTEXT(t *TextEntry) {
 		return
 	}
 
-	copy(e.tmp[:len(t.Key)], []byte(t.Key))
-	e.tmp[len(t.Key)] = 0
-	length := len(t.Key) + 1
-	if len(t.Value) != 0 {
-		length += len(t.Value)
-		copy(e.tmp[len(t.Key)+1:], []byte(t.Value))
+	tl := len(t.Key) + len(t.Value) + 1
+	buf := make([]byte, tl)
+	copy(buf, []byte(t.Key))
+	buf[len(t.Key)] = 0
+	for i, b := range t.Value {
+		buf[len(t.Key)+i+1] = byte(b)
 	}
 
-	e.writeChunk(e.tmp[:length], "tEXt")
+	e.writeChunk(buf, "tEXt")
+	return
+}
+
+// maybeWriteZTXT will write out a zTXt entry.
+func (e *encoder) maybeWriteZTXT(t *TextEntry) {
+	if e.err != nil {
+		return
+	}
+
+	val, method, err := e.pngCompress([]byte(t.Value))
+	if err != nil {
+		e.err = err
+		return
+	}
+
+	copy(e.tmp[:len(t.Key)], []byte(t.Key))
+	e.tmp[len(t.Key)] = 0
+	e.tmp[len(t.Key)+1] = byte(method)
+	length := len(t.Key) + 2
+	if len(t.Value) != 0 {
+		length += len(t.Value)
+		copy(e.tmp[len(t.Key)+1:], []byte(val))
+	}
+
+	e.writeChunk(e.tmp[:length], "zTXt")
 	return
 }
 
@@ -606,6 +632,87 @@ func (e *encoder) maybeWriteSRGB(m *Metadata) {
 
 	e.tmp[0] = byte(*m.SRGBIntent)
 	e.writeChunk(e.tmp[:1], "sRGB")
+	return
+}
+
+// pngCompress will compress a byte slice. Returns the compressed
+// slice, the compression type (0==no compression, 1 == deflate) and
+// an error if something went wrong.
+func (e *encoder) pngCompress(input []byte) ([]byte, int, error) {
+	var b bytes.Buffer
+
+	// Set up a new zlib writer here with the appropriate compression
+	// level. Theoretically we really ought to cache these for
+	// performance reasons, but we can deal with that later after
+	// everything actually works.
+	level := levelToZlib(e.enc.CompressionLevel)
+	zw, err := zlib.NewWriterLevel(&b, level)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	// Write the input to the zlib writer and get it smushed.
+	if _, err := zw.Write(input); err != nil {
+		return nil, 0, err
+	}
+	// We're done so close the writer to flush out anything left and
+	// make sure it's smushed properly.
+	if err := zw.Close(); err != nil {
+		return nil, 0, err
+	}
+
+	// Return the smushed bytes in our buffer and the compression
+	// method. (Which is 0, or deflate, since that's all that's
+	// supported)
+	return b.Bytes(), 0, nil
+}
+
+// maybeWriteICCP will write out an ICCP chunk if the metadata has
+// ICC information.
+func (e *encoder) maybeWriteICCP(ctx context.Context, m *Metadata, opts ...image.WriteOption) {
+	// If we have no metadata, or we do but the sRGB intent bit is
+	// empty, then just bail.
+	if m == nil || e.err != nil {
+		return
+	}
+
+	// No encoded or decoded data so no ICC -- skip
+	if m.icc == nil && len(m.rawIcc) == 0 {
+		return
+	}
+
+	var chunk []byte
+	// Do we have a raw ICCP chunk we read and presumably haven't
+	// decoded? Then just use it.
+	if len(m.rawIcc) != 0 {
+		chunk = m.rawIcc
+	}
+
+	// Do we have an ICC object registered? If so, encode that and use
+	// its encoded value.
+	if m.icc != nil {
+		var err error
+		// Go encode the thing.
+		chunk, err = m.icc.Encode(ctx, opts...)
+		if err != nil {
+			e.err = err
+			return
+		}
+
+		chunk, compression, err := e.pngCompress(chunk)
+		if err != nil {
+			e.err = err
+			return
+		}
+
+		var icc []byte
+		icc = []byte(m.iccName)
+		icc = append(icc, 0)
+		icc = append(icc, byte(compression))
+		icc = append(icc, chunk...)
+		e.writeChunk(icc, "iCCP")
+	}
+
 	return
 }
 
@@ -778,11 +885,14 @@ func (enc *Encoder) EncodeExtended(ctx context.Context, w io.Writer, m image.Ima
 		e.maybeWriteCHRM(metadata)
 		e.maybeWriteSRGB(metadata)
 		e.maybeWriteTIME(metadata)
+		e.maybeWriteICCP(ctx, metadata, opts...)
 
 		for _, v := range metadata.Text {
 			switch v.EntryType {
 			case EtText:
 				e.maybeWriteTEXT(v)
+			case EtZtext:
+				e.maybeWriteZTXT(v)
 			}
 		}
 	}

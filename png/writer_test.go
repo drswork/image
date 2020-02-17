@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"os"
 	"testing"
 
 	"github.com/drswork/image"
@@ -39,6 +40,19 @@ func diff(m0, m1 image.Image) error {
 	return nil
 }
 
+func diffMetadata(m0, m1 *Metadata) error {
+	if m0.LastModified != nil || m1.LastModified != nil {
+		if (m0.LastModified != nil && m1.LastModified == nil) || (m0.LastModified == nil && m1.LastModified != nil) {
+			return fmt.Errorf("LastModified diff: %v vs %v", m0.LastModified, m1.LastModified)
+		}
+		if !m0.LastModified.Equal(*m1.LastModified) {
+			return fmt.Errorf("LastModified diff: %v vs %v", m0.LastModified, m1.LastModified)
+		}
+	}
+
+	return nil
+}
+
 func encodeDecode(m image.Image) (image.Image, error) {
 	var b bytes.Buffer
 	err := Encode(&b, m)
@@ -47,6 +61,18 @@ func encodeDecode(m image.Image) (image.Image, error) {
 	}
 	i, _, err := DecodeExtended(context.TODO(), &b, image.OptionDecodeImage)
 	return i, err
+}
+
+func extendedEncodeDecode(orig image.Image, m *Metadata) (image.Image, image.Metadata, error) {
+	var b bytes.Buffer
+	ctx := context.TODO()
+	err := EncodeExtended(ctx, &b, orig, image.MetadataWriteOption{m})
+	if err != nil {
+		return nil, nil, err
+	}
+	i, nm, err := DecodeExtended(context.TODO(), &b, image.DataDecodeOptions{image.DecodeData, image.DecodeData})
+	return i, nm, err
+
 }
 
 func TestWriter(t *testing.T) {
@@ -77,6 +103,51 @@ func TestWriter(t *testing.T) {
 		}
 		// Compare the two.
 		err = diff(m0, m2)
+		if err != nil {
+			t.Error(fn, err)
+			continue
+		}
+	}
+}
+
+func readPNGExtended(ctx context.Context, filename string) (image.Image, image.Metadata, error) {
+	f, err := os.Open(filename)
+	if err != nil {
+		return nil, nil, err
+	}
+	defer f.Close()
+	img, m, err := DecodeExtended(ctx, f, image.DataDecodeOptions{image.DecodeData, image.DecodeData})
+	return img, m, err
+}
+
+func TestMetadataWriting(t *testing.T) {
+	// The filenames variable is declared in reader_test.go.
+	names := filenames
+	if testing.Short() {
+		names = filenamesShort
+	}
+	ctx := context.TODO()
+	for _, fn := range names {
+		qfn := "testdata/pngsuite/" + fn + ".png"
+		// Read the image.
+		_, m00, err := readPNGExtended(ctx, qfn)
+		if err != nil {
+			t.Error(fn, err)
+			continue
+		}
+		// Read the image again, encode it, and decode it.
+		m1, m11, err := readPNGExtended(ctx, qfn)
+		if err != nil {
+			t.Error(fn, err)
+			continue
+		}
+		_, m22, err := extendedEncodeDecode(m1, m11.(*Metadata))
+		if err != nil {
+			t.Error(fn, err)
+			continue
+		}
+		// Compare the two.
+		err = diffMetadata(m00.(*Metadata), m22.(*Metadata))
 		if err != nil {
 			t.Error(fn, err)
 			continue

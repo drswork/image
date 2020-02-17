@@ -674,6 +674,11 @@ func Encode(w io.Writer, m image.Image) error {
 	return e.Encode(w, m)
 }
 
+func EncodeExtended(ctx context.Context, w io.Writer, m image.Image, opts ...image.WriteOption) error {
+	var e Encoder
+	return e.EncodeExtended(ctx, w, m, opts...)
+}
+
 // Encode writes the Image m to w in PNG format.
 func (enc *Encoder) Encode(w io.Writer, m image.Image) error {
 	return enc.EncodeExtended(context.TODO(), w, m)

@@ -557,13 +557,9 @@ func (e *encoder) maybeWriteTIME(m *Metadata) {
 	return
 }
 
-// maybeWriteTEXT will write out any tEXt entries we have.
+// maybeWriteTEXT will write out a tEXt entry.
 func (e *encoder) maybeWriteTEXT(t *TextEntry) {
 	if e.err != nil {
-		return
-	}
-
-	if t.EntryType != EtText {
 		return
 	}
 
@@ -576,6 +572,21 @@ func (e *encoder) maybeWriteTEXT(t *TextEntry) {
 	}
 
 	e.writeChunk(e.tmp[:length], "tEXt")
+	return
+}
+
+func (e *encoder) maybeWriteHIST(m *Metadata) {
+	if m == nil || m.Histogram == nil {
+		return
+	}
+	if e.err != nil {
+		return
+	}
+	b := make([]byte, len(m.Histogram)*2)
+	for i, h := range m.Histogram {
+		binary.BigEndian.PutUint16(b[i*2:i*2+2], h)
+	}
+	e.writeChunk(b, "hIST")
 	return
 }
 
@@ -762,13 +773,18 @@ func (enc *Encoder) EncodeExtended(ctx context.Context, w io.Writer, m image.Ima
 		e.maybeWriteTIME(metadata)
 
 		for _, v := range metadata.Text {
-			e.maybeWriteTEXT(v)
+			switch v.EntryType {
+			case EtText:
+				e.maybeWriteTEXT(v)
+			}
 		}
 	}
 
 	if pal != nil {
 		e.writePLTEAndTRNS(pal)
 	}
+	e.maybeWriteHIST(metadata)
+
 	e.writeIDATs()
 
 	e.writeIEND()

@@ -9,6 +9,7 @@ import (
 	"io"
 	"io/ioutil"
 	"log"
+	"strings"
 	"time"
 
 	"github.com/drswork/image"
@@ -702,6 +703,24 @@ func readData(ctx context.Context, d *decoder, length uint32) ([]byte, error) {
 }
 
 func (m *Metadata) validateMetadata() error {
+
+	// Validate the text entries a little. Keys can't contain nulls and
+	// must be between 1 and 79 bytes long.
+	for _, v := range m.Text {
+		if len(v.Key) > 79 || len(v.Key) == 0 {
+			return fmt.Errorf("Invalid length for key %q", v.Key)
+		}
+		if strings.Contains(v.Key, "\x00") {
+			return fmt.Errorf("text key %q contains a null", v.Key)
+		}
+	}
+
+	// Possible future check -- the value for uncompressed and
+	// compressed-not-unicode text should be Latin-1, which means
+	// theoretically no nulls and no codepoints between 0x7F and
+	// 0x9F. Not sure it's a good idea to actually check, since the
+	// likelihood of people messing that up is pretty high and we'd hate
+	// to barf writing out files that we read.
 
 	return nil
 }

@@ -13,6 +13,7 @@ import (
 	"io"
 	"io/ioutil"
 	"os"
+	"reflect"
 	"testing"
 
 	"github.com/drswork/image"
@@ -41,13 +42,72 @@ func diff(m0, m1 image.Image) error {
 }
 
 func diffMetadata(m0, m1 *Metadata) error {
-	if m0.LastModified != nil || m1.LastModified != nil {
-		if (m0.LastModified != nil && m1.LastModified == nil) || (m0.LastModified == nil && m1.LastModified != nil) {
-			return fmt.Errorf("LastModified diff: %v vs %v", m0.LastModified, m1.LastModified)
+	// Both nil so we're fine, they're equal.
+	if m0 == nil && m1 == nil {
+		return nil
+	}
+	// One but not both is nil, so that's not equal
+	if m0 == nil || m1 == nil {
+		return fmt.Errorf("Metadata unequal: %v vs %v", m0, m1)
+	}
+
+	var mc0, mc1 Metadata
+	// Make copies of the metadata struct so we can clean out the bits
+	// we can't compare at the moment.
+	mc0 = *m0
+	mc1 = *m1
+
+	mc0.exif = nil
+	mc0.exifDecodeErr = nil
+	mc0.rawExif = nil
+	mc0.xmp = nil
+	mc0.xmpDecodeErr = nil
+	mc0.rawXmp = nil
+	mc0.icc = nil
+	mc0.iccDecodeErr = nil
+	mc0.rawIcc = nil
+	mc0.iccName = ""
+	mc0.Text = nil
+	mc1.exif = nil
+	mc1.exifDecodeErr = nil
+	mc1.rawExif = nil
+	mc1.xmp = nil
+	mc1.xmpDecodeErr = nil
+	mc1.rawXmp = nil
+	mc1.icc = nil
+	mc1.iccDecodeErr = nil
+	mc1.rawIcc = nil
+	mc1.iccName = ""
+	mc1.Text = nil
+
+	if !reflect.DeepEqual(&mc0, &mc1) {
+		if (mc0.LastModified != nil || mc1.LastModified != nil) && !reflect.DeepEqual(mc0.LastModified, mc1.LastModified) {
+			return fmt.Errorf("LastModified different: %v vs %v", mc0.LastModified, mc1.LastModified)
 		}
-		if !m0.LastModified.Equal(*m1.LastModified) {
-			return fmt.Errorf("LastModified diff: %v vs %v", m0.LastModified, m1.LastModified)
+		if (mc0.Chroma != nil || mc1.Chroma != nil) && !reflect.DeepEqual(mc0.Chroma, mc1.Chroma) {
+			return fmt.Errorf("Chroma different: %v vs %v", mc0.Chroma, mc1.Chroma)
 		}
+		if (mc0.Gamma != nil || mc1.Gamma != nil) && !reflect.DeepEqual(mc0.Gamma, mc1.Gamma) {
+			return fmt.Errorf("Gamma different: %v vs %v", mc0.Gamma, mc1.Gamma)
+		}
+		if (mc0.SRGBIntent != nil || mc1.SRGBIntent != nil) && reflect.DeepEqual(mc0.SRGBIntent, mc1.SRGBIntent) {
+			return fmt.Errorf("SRGBIntent different: %v vs %v", mc0.SRGBIntent, mc1.SRGBIntent)
+		}
+		if (mc0.SignificantBits != nil || mc1.SignificantBits != nil) && reflect.DeepEqual(mc0.SignificantBits, mc1.SignificantBits) {
+			return fmt.Errorf("SignificantBits different: %v vs %v", mc0.SignificantBits, mc1.SignificantBits)
+		}
+		if (mc0.Background != nil || mc1.Background != nil) && reflect.DeepEqual(mc0.Background, mc1.Background) {
+			return fmt.Errorf("Background different: %v vs %v", mc0.Background, mc1.Background)
+		}
+
+		if (mc0.Dimension != nil || mc1.Dimension != nil) && reflect.DeepEqual(mc0.Dimension, mc1.Dimension) {
+			return fmt.Errorf("Dimension different: %v vs %v", mc0.Dimension, mc1.Dimension)
+		}
+
+		if (mc0.Histogram != nil || mc1.SignificantBits != nil) && reflect.DeepEqual(mc0.SignificantBits, mc1.SignificantBits) {
+			return fmt.Errorf("SignificantBits different: %v vs %v", mc0.SignificantBits, mc1.SignificantBits)
+		}
+
 	}
 
 	return nil

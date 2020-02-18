@@ -538,6 +538,25 @@ func (e *encoder) maybeWriteGAMA(m *Metadata) {
 	return
 }
 
+// maybeWritePHYS will write out a pHYs chunk if the metadata has
+// physical size information.
+func (e *encoder) maybeWritePHYS(m *Metadata) {
+	// If we have no metadata, or we do but the gamma bit is empty, then
+	// just bail.
+	if m == nil || m.Dimension == nil {
+		return
+	}
+	if e.err != nil {
+		return
+	}
+
+	binary.BigEndian.PutUint32(e.tmp[:4], uint32(m.Dimension.X))
+	binary.BigEndian.PutUint32(e.tmp[4:8], uint32(m.Dimension.Y))
+	e.tmp[8] = byte(m.Dimension.Unit)
+	e.writeChunk(e.tmp[:9], "pHYs")
+	return
+}
+
 // maybeWriteTIME will write out a tIME chunk if the metadata has time
 // information. This is the last modified time, and per the spec isn't
 // the image creation time. It feels like maybe this should be set on
@@ -940,6 +959,7 @@ func (enc *Encoder) EncodeExtended(ctx context.Context, w io.Writer, m image.Ima
 		e.maybeWriteSRGB(metadata)
 		e.maybeWriteTIME(metadata)
 		e.maybeWriteICCP(ctx, metadata, opts...)
+		e.maybeWritePHYS(metadata)
 
 		for _, v := range metadata.Text {
 			switch v.EntryType {

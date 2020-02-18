@@ -330,6 +330,16 @@ func TestMetadataWriting(t *testing.T) {
 		t.Errorf("Metadata utxt(3) error, got %v, want %v", sm.(*Metadata).Text[0], m.Text[0])
 	}
 
+	m = &Metadata{}
+	m.Dimension = &Dimension{X: 0x01234567, Y: 0x89abcdef, Unit: 12}
+	_, sm, err = extendedEncodeDecode(i, m)
+	if err != nil {
+		t.Errorf("Metadata dimension round trip error: %v", err)
+	}
+	if !reflect.DeepEqual(m.Dimension, sm.(*Metadata).Dimension) {
+		t.Errorf("Metadata dimension error, got %v, want %v", sm.(*Metadata).Dimension, m.Dimension)
+	}
+
 }
 
 func TestMetadataRoundTrip(t *testing.T) {

@@ -223,6 +223,7 @@ func TestMetadataWriting(t *testing.T) {
 		t.Error(name, err)
 	}
 
+	// Test tEXt entries
 	m = &Metadata{}
 	gamma := uint32(0xdead)
 	m.Gamma = &gamma
@@ -233,6 +234,23 @@ func TestMetadataWriting(t *testing.T) {
 	err = diffMetadata(m, sm.(*Metadata))
 	if err != nil {
 		t.Error(name, err)
+	}
+
+	m = &Metadata{}
+	m.Text = append(m.Text, &TextEntry{
+		Key:       "A random key",
+		Value:     "123",
+		EntryType: EtZtext,
+	})
+	_, sm, err = extendedEncodeDecode(i, m)
+	if err != nil {
+		t.Errorf("Metadata ztxt round trip error: %v", err)
+	}
+	if len(sm.(*Metadata).Text) != 1 {
+		t.Errorf("Metadata ztxt count, got %v, want 1", len(sm.(*Metadata).Text))
+	}
+	if !reflect.DeepEqual(m.Text, sm.(*Metadata).Text) {
+		t.Errorf("Metadata text error, got %v, want %v", sm.(*Metadata).Text[0], m.Text[0])
 	}
 
 	m = &Metadata{}

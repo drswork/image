@@ -592,9 +592,6 @@ func decodeKeyValComp(ctx context.Context, blob []byte) (string, string, error) 
 	// How is the value stored?
 	switch blob[sep+1] {
 	case 0:
-		// Uncompressed.
-		val = string(blob[sep+2:])
-	case 1:
 		// ZLib compressed
 		r, err := zlib.NewReader(bytes.NewReader(blob[sep+2:]))
 		if err != nil {
@@ -607,6 +604,7 @@ func decodeKeyValComp(ctx context.Context, blob []byte) (string, string, error) 
 		}
 		val = string(u)
 	default:
+		// Everything else (that is, any compression type besides 0) is unsupported.
 		return "", "", FormatError(fmt.Sprintf("unknown compression type %v", blob[sep+1]))
 	}
 

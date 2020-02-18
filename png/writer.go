@@ -13,6 +13,7 @@ import (
 	"fmt"
 	"hash/crc32"
 	"io"
+	"log"
 	"strconv"
 
 	"github.com/drswork/image"
@@ -585,6 +586,7 @@ func (e *encoder) maybeWriteZTXT(t *TextEntry) {
 	}
 
 	val, method, err := e.pngCompress([]byte(t.Value))
+	log.Printf("Writing %v bytes compressed", len(val))
 	if err != nil {
 		e.err = err
 		return
@@ -594,9 +596,9 @@ func (e *encoder) maybeWriteZTXT(t *TextEntry) {
 	e.tmp[len(t.Key)] = 0
 	e.tmp[len(t.Key)+1] = byte(method)
 	length := len(t.Key) + 2
-	if len(t.Value) != 0 {
-		length += len(t.Value)
-		copy(e.tmp[len(t.Key)+1:], []byte(val))
+	if len(val) != 0 {
+		length += len(val)
+		copy(e.tmp[len(t.Key)+2:], []byte(val))
 	}
 
 	e.writeChunk(e.tmp[:length], "zTXt")

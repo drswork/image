@@ -13,7 +13,6 @@ import (
 	"fmt"
 	"hash/crc32"
 	"io"
-	"log"
 	"strconv"
 
 	"github.com/drswork/image"
@@ -586,7 +585,6 @@ func (e *encoder) maybeWriteZTXT(t *TextEntry) {
 	}
 
 	val, method, err := e.pngCompress([]byte(t.Value))
-	log.Printf("Writing %v bytes compressed", len(val))
 	if err != nil {
 		e.err = err
 		return
@@ -602,6 +600,60 @@ func (e *encoder) maybeWriteZTXT(t *TextEntry) {
 	}
 
 	e.writeChunk(e.tmp[:length], "zTXt")
+	return
+}
+
+// maybeWriteITXT will write out an iTXt entry.
+func (e *encoder) maybeWriteITXT(t *TextEntry) {
+	if e.err != nil {
+		return
+	}
+
+	val, method, err := e.pngCompress([]byte(t.Value))
+	if err != nil {
+		e.err = err
+		return
+	}
+
+	buf := make([]byte, len(t.Key)+len(val)+len(t.LanguageTag)+len(t.TranslatedKey)+5)
+
+	// Add the key
+	copy(buf[:len(t.Key)], []byte(t.Key))
+	// Key null terminator
+	buf[len(t.Key)] = 0
+	// Compression flag. Which we always set, though it's optional and
+	// we could stuff uncompressed text in here.
+	//
+	// TODO: Check and see if the compressed buffer is smaller than the
+	// original text and choose compressed or uncompressed based on
+	// that.
+	buf[len(t.Key)+1] = 1
+	// Compression method (which is always 0, but whatever)
+	buf[len(t.Key)+2] = byte(method)
+	length := len(t.Key) + 3
+
+	// Language Tag, if we have one
+	if len(t.LanguageTag) > 0 {
+		copy(buf[length:], []byte(t.LanguageTag))
+		length += len(t.LanguageTag)
+	}
+	// Language tag null terminator
+	buf[length] = 0
+	length++
+
+	// Translated key, if we have one
+	if len(t.TranslatedKey) > 0 {
+		copy(buf[length:], []byte(t.TranslatedKey))
+		length += len(t.TranslatedKey)
+	}
+	// Translated key null terminator
+	buf[length] = 0
+	length++
+
+	// Tack on the compressed value
+	copy(buf[length:], val)
+
+	e.writeChunk(buf, "iTXt")
 	return
 }
 
@@ -895,6 +947,8 @@ func (enc *Encoder) EncodeExtended(ctx context.Context, w io.Writer, m image.Ima
 				e.maybeWriteTEXT(v)
 			case EtZtext:
 				e.maybeWriteZTXT(v)
+			case EtItext:
+				e.maybeWriteITXT(v)
 			}
 		}
 	}

@@ -223,7 +223,7 @@ func TestMetadataWriting(t *testing.T) {
 		t.Error(name, err)
 	}
 
-	// Test tEXt entries
+	// Test gamma entries
 	m = &Metadata{}
 	gamma := uint32(0xdead)
 	m.Gamma = &gamma
@@ -236,6 +236,7 @@ func TestMetadataWriting(t *testing.T) {
 		t.Error(name, err)
 	}
 
+	// Test compressed text
 	m = &Metadata{}
 	m.Text = append(m.Text, &TextEntry{
 		Key:       "A random key",
@@ -253,10 +254,11 @@ func TestMetadataWriting(t *testing.T) {
 		t.Errorf("Metadata text error, got %v, want %v", sm.(*Metadata).Text[0], m.Text[0])
 	}
 
+	// Test plain text
 	m = &Metadata{}
 	m.Text = append(m.Text, &TextEntry{
-		Key:       "A random key",
-		Value:     "123",
+		Key:       "Composer",
+		Value:     "Sergei Rachmaninoff",
 		EntryType: EtText,
 	})
 	_, sm, err = extendedEncodeDecode(i, m)
@@ -268,6 +270,64 @@ func TestMetadataWriting(t *testing.T) {
 	}
 	if !reflect.DeepEqual(m.Text, sm.(*Metadata).Text) {
 		t.Errorf("Metadata text error, got %v, want %v", sm.(*Metadata).Text[0], m.Text[0])
+	}
+
+	// Test itxt in its many ways
+	m = &Metadata{}
+	m.Text = append(m.Text, &TextEntry{
+		Key:       "Composer",
+		Value:     "Серге́й Васи́льевич Рахма́нинов",
+		EntryType: EtItext,
+	})
+	_, sm, err = extendedEncodeDecode(i, m)
+	if err != nil {
+		t.Errorf("Metadata utxt(1) round trip error: %v", err)
+	}
+	if len(sm.(*Metadata).Text) != 1 {
+		t.Errorf("Metadata utxt(1) count, got %v, want 1", len(sm.(*Metadata).Text))
+	}
+	if !reflect.DeepEqual(m.Text, sm.(*Metadata).Text) {
+		t.Errorf("Metadata utxt(1) error, got %v, want %v", sm.(*Metadata).Text[0], m.Text[0])
+	}
+
+	// Test itxt in its many ways. This one with a language tag
+	m = &Metadata{}
+	m.Text = append(m.Text, &TextEntry{
+		Key:         "Composer",
+		Value:       "Серге́й Васи́льевич Рахма́нинов",
+		EntryType:   EtItext,
+		LanguageTag: "en-us",
+	})
+	_, sm, err = extendedEncodeDecode(i, m)
+	if err != nil {
+		t.Errorf("Metadata utxt(2) round trip error: %v", err)
+	}
+	if len(sm.(*Metadata).Text) != 1 {
+		t.Errorf("Metadata utxt(2) count, got %v, want 1", len(sm.(*Metadata).Text))
+	}
+	if !reflect.DeepEqual(m.Text, sm.(*Metadata).Text) {
+		t.Errorf("Metadata utxt(2) error, got %v, want %v", sm.(*Metadata).Text[0], m.Text[0])
+	}
+
+	// Test itxt in its many ways. This one with a translated key and
+	// language tag.
+	m = &Metadata{}
+	m.Text = append(m.Text, &TextEntry{
+		Key:           "Composer",
+		Value:         "Серге́й Васи́льевич Рахма́нинов",
+		EntryType:     EtItext,
+		LanguageTag:   "ja",
+		TranslatedKey: "作曲",
+	})
+	_, sm, err = extendedEncodeDecode(i, m)
+	if err != nil {
+		t.Errorf("Metadata utxt(3) round trip error: %v", err)
+	}
+	if len(sm.(*Metadata).Text) != 1 {
+		t.Errorf("Metadata utxt(3) count, got %v, want 1", len(sm.(*Metadata).Text))
+	}
+	if !reflect.DeepEqual(m.Text, sm.(*Metadata).Text) {
+		t.Errorf("Metadata utxt(3) error, got %v, want %v", sm.(*Metadata).Text[0], m.Text[0])
 	}
 
 }

@@ -202,8 +202,8 @@ const (
 	EtText TextType = iota
 	// EtZtext indicates a compressed 7-bit ascii text entry
 	EtZtext
-	// EtUtext indicates a compressed unicode text entry
-	EtUtext
+	// EtItext indicates a compressed unicode text entry
+	EtItext
 )
 
 // String generates a human readable version of the text entry storage type.
@@ -213,7 +213,7 @@ func (t TextType) String() string {
 		return "text"
 	case EtZtext:
 		return "compressed text"
-	case EtUtext:
+	case EtItext:
 		return "unicode text"
 	default:
 		return "unknown text type"
@@ -382,7 +382,7 @@ func (d *decoder) parseITXT(ctx context.Context, length uint32) error {
 		return err
 	}
 
-	d.metadata.Text = append(d.metadata.Text, &TextEntry{key, val, EtUtext, lang, transkey})
+	d.metadata.Text = append(d.metadata.Text, &TextEntry{key, val, EtItext, lang, transkey})
 
 	return d.verifyChecksum()
 }
@@ -658,7 +658,7 @@ func decodeItxtEntry(ctx context.Context, blob []byte) (string, string, string, 
 		value = string(rawValue)
 	case 1:
 		log.Printf("compressed")
-		if blob[sep+2] != 1 {
+		if blob[sep+2] != 0 {
 			return "", "", "", "", FormatError(fmt.Sprintf("unknown compression flag %v", blob[sep+2]))
 		}
 		// ZLib compressed

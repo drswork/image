@@ -3,6 +3,7 @@ package xmp
 
 import (
 	"context"
+
 	"github.com/drswork/image"
 	"github.com/drswork/image/metadata"
 )
@@ -13,11 +14,11 @@ func init() {
 }
 
 // Decode decodes XMP format metadata.
-func Decode(ctx context.Context, b []byte, opt ...image.ReadOption) (*metadata.XMP, error) {
+func Decode(ctx context.Context, b string, opt ...image.ReadOption) (*metadata.XMP, error) {
 	panic("Not implemented")
 }
 
 // Encode encodes XMP format metadata.
-func Encode(ctx context.Context, x *metadata.XMP, opt ...image.WriteOption) ([]byte, error) {
+func Encode(ctx context.Context, x *metadata.XMP, opt ...image.WriteOption) (string, error) {
 	panic("Not implemented")
 }

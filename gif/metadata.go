@@ -21,7 +21,7 @@ type Metadata struct {
 	// will only be set of the metadata decode option was set to
 	// Deferred and the metadata hasn't been accessed. Decoding the
 	// metadata will clear this cache.
-	rawXmp []byte
+	rawXmp *string
 	// Comments holds the contents of any comment extension blocks.
 	Comments []string
 	// Extensions is a map that holds any extension data we can't deal with
@@ -64,7 +64,7 @@ func (m *Metadata) XMP(ctx context.Context, opt ...image.ReadOption) (*metadata.
 		return nil, m.xmpDecodeErr
 	}
 	if m.rawXmp != nil {
-		x, err := metadata.DecodeXMP(ctx, m.rawXmp, opt...)
+		x, err := metadata.DecodeXMP(ctx, *m.rawXmp, opt...)
 		if err != nil {
 			m.xmpDecodeErr = err
 			return nil, err

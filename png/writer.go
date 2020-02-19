@@ -538,6 +538,36 @@ func (e *encoder) maybeWriteGAMA(m *Metadata) {
 	return
 }
 
+// maybeWriteXMP will write out the XMP data if we have it. XMP data
+// is just an xml-encoded string that goes out in an iTXt chunk.
+func (e *encoder) maybeWriteXMP(ctx context.Context, m *Metadata, opts ...image.WriteOption) {
+	// If we have no metadata, or we do but the gamma bit is empty, then
+	// just bail.
+	if m == nil || (m.rawXmp == nil && m.xmp == nil) {
+		return
+	}
+	if e.err != nil {
+		return
+	}
+
+	xmpText := ""
+	if m.rawXmp != nil {
+		xmpText = *m.rawXmp
+	}
+	if m.xmp != nil {
+		var err error
+		xmpText, err = m.xmp.Encode(ctx, opts...)
+		if err != nil {
+			e.err = err
+			return
+		}
+	}
+
+	v := &TextEntry{Key: xmpTextKey, Value: xmpText, EntryType: EtItext}
+	e.maybeWriteITXT(v)
+	return
+}
+
 // maybeWritePHYS will write out a pHYs chunk if the metadata has
 // physical size information.
 func (e *encoder) maybeWritePHYS(m *Metadata) {
@@ -961,6 +991,7 @@ func (enc *Encoder) EncodeExtended(ctx context.Context, w io.Writer, m image.Ima
 		e.maybeWriteICCP(ctx, metadata, opts...)
 		e.maybeWritePHYS(metadata)
 
+		e.maybeWriteXMP(ctx, metadata, opts...)
 		for _, v := range metadata.Text {
 			switch v.EntryType {
 			case EtText:

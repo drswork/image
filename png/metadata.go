@@ -41,7 +41,7 @@ type Metadata struct {
 	// will only be set of the metadata decode option was set to
 	// Deferred and the metadata hasn't been accessed. Decoding the
 	// metadata will clear this cache.
-	rawXmp []byte
+	rawXmp *string
 	// icc holds the cached decoded ICC color profile data. This will be
 	// set when the image is read, if the metadata decode option was set
 	// to DecodeData, or on first access if the metadata decode option
@@ -135,6 +135,9 @@ func (m *Metadata) SetEXIF(e *metadata.EXIF) {
 	m.rawExif = nil
 }
 
+// If we see an iTXt entry with this name we know it's an XMP entry.
+const xmpTextKey = "XML:com.adobe.xmp"
+
 // Xmp returns the xmp information associated with the metadata
 // object. If there is no xmp information then it will return nil. The
 // returned xmp structure will still be associated with its parent
@@ -149,7 +152,7 @@ func (m *Metadata) XMP(ctx context.Context, opt ...image.ReadOption) (*metadata.
 		return nil, m.xmpDecodeErr
 	}
 	if m.rawXmp != nil {
-		x, err := metadata.DecodeXMP(ctx, m.rawXmp, opt...)
+		x, err := metadata.DecodeXMP(ctx, *m.rawXmp, opt...)
 		if err != nil {
 			m.xmpDecodeErr = err
 			return nil, err
@@ -379,7 +382,11 @@ func (d *decoder) parseITXT(ctx context.Context, length uint32) error {
 		return err
 	}
 
-	d.metadata.Text = append(d.metadata.Text, &TextEntry{key, val, EtItext, lang, transkey})
+	if key == xmpTextKey {
+		d.metadata.rawXmp = &val
+	} else {
+		d.metadata.Text = append(d.metadata.Text, &TextEntry{key, val, EtItext, lang, transkey})
+	}
 
 	return d.verifyChecksum()
 }

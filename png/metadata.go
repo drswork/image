@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
-	"log"
 	"strings"
 	"time"
 
@@ -355,7 +354,6 @@ func (d *decoder) parseTEXT(ctx context.Context, length uint32) error {
 }
 
 func (d *decoder) parseZTXT(ctx context.Context, length uint32) error {
-	log.Printf("length is %v", length)
 	tb, err := readData(ctx, d, length)
 	if err != nil {
 		return err
@@ -371,7 +369,6 @@ func (d *decoder) parseZTXT(ctx context.Context, length uint32) error {
 }
 
 func (d *decoder) parseITXT(ctx context.Context, length uint32) error {
-	log.Printf("length is %v", length)
 	tb, err := readData(ctx, d, length)
 	if err != nil {
 		return err
@@ -642,7 +639,6 @@ func decodeItxtEntry(ctx context.Context, blob []byte) (string, string, string, 
 	}
 	ts += ks + 1
 
-	log.Printf("sep %v, ks %v, ts %v, len %v", sep, ks, ts, len(blob))
 	languageTag := string(blob[sep+3 : ks])
 	translatedKeyword := string(blob[ks+1 : ts])
 	rawValue := []byte{}
@@ -654,10 +650,8 @@ func decodeItxtEntry(ctx context.Context, blob []byte) (string, string, string, 
 	// How is the value stored?
 	switch blob[sep+1] {
 	case 0:
-		log.Printf("Uncompressed")
 		value = string(rawValue)
 	case 1:
-		log.Printf("compressed")
 		if blob[sep+2] != 0 {
 			return "", "", "", "", FormatError(fmt.Sprintf("unknown compression flag %v", blob[sep+2]))
 		}

@@ -440,11 +440,17 @@ func (d *decoder) parseGAMA(ctx context.Context, length uint32) error {
 }
 
 func (d *decoder) parseICCP(ctx context.Context, length uint32) error {
-	if _, err := io.ReadFull(d.r, d.tmp[:length]); err != nil {
+	var buf []byte
+	if length > 768 {
+		buf = make([]byte, length)
+	} else {
+		buf = d.tmp[:length]
+	}
+	if _, err := io.ReadFull(d.r, buf); err != nil {
 		return err
 	}
-	d.crc.Write(d.tmp[:length])
-	pname, profile, err := decodeKeyValComp(ctx, d.tmp[:length])
+	d.crc.Write(buf)
+	pname, profile, err := decodeKeyValComp(ctx, buf)
 	if err != nil {
 		return err
 	}

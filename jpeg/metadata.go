@@ -79,7 +79,7 @@ func (m *Metadata) EXIF(ctx context.Context, opt ...image.ReadOption) (*metadata
 		return nil, m.exifDecodeErr
 	}
 	if m.rawExif != nil {
-		x, err := metadata.DecodeEXIF(ctx, m.rawExif, opt...)
+		x, err := metadata.DecodeEXIF(ctx, m.rawExif, true, opt...)
 		if err != nil {
 			m.exifDecodeErr = err
 			return nil, err

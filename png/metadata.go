@@ -116,7 +116,17 @@ func (m *Metadata) EXIF(ctx context.Context, opt ...image.ReadOption) (*metadata
 		return nil, m.exifDecodeErr
 	}
 	if m.rawExif != nil {
-		x, err := metadata.DecodeEXIF(ctx, m.rawExif, opt...)
+		var isBigEndian bool
+		switch string(m.rawExif[0:4]) {
+		case string([]byte{73, 73, 42, 0}):
+			isBigEndian = false
+		case string([]byte{77, 77, 0, 42}):
+			isBigEndian = true
+		default:
+			return nil, fmt.Errorf("Invalid exif prefix %v", m.rawExif[0:4])
+		}
+
+		x, err := metadata.DecodeEXIF(ctx, m.rawExif[4:], isBigEndian, opt...)
 		if err != nil {
 			m.exifDecodeErr = err
 			return nil, err

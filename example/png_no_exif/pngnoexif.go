@@ -40,5 +40,5 @@ func main() {
 		log.Fatalf("Can't decode exif metadata: %v", err)
 	}
 	// This should never be reached.
-	fmt.Printf("The image creator is %v\n", x.Creator)
+	fmt.Printf("The image creator is %v\n", x.Artist)
 }

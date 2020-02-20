@@ -85,11 +85,11 @@ type XMPIDQ struct {
 
 // XMP holds the XMP metadata. It's a collection of sub-types
 type XMP struct {
-	CoreProperties  Core
-	Properties      XMPSpecific
-	Rights          XMPRights
-	MediaManagement XMPMediaManagement
-	IDQ             XMPIDQ
+	CoreProperties  *Core
+	Properties      *XMPSpecific
+	Rights          *XMPRights
+	MediaManagement *XMPMediaManagement
+	IDQ             *XMPIDQ
 }
 
 func DecodeXMP(ctx context.Context, b string, opt ...image.ReadOption) (*XMP, error) {

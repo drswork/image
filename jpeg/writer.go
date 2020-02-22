@@ -6,10 +6,14 @@ package jpeg
 
 import (
 	"bufio"
+	"context"
 	"errors"
+	"fmt"
+	"io"
+	"log"
+
 	"github.com/drswork/image"
 	"github.com/drswork/image/color"
-	"io"
 )
 
 // min returns the minimum of two integers.
@@ -561,13 +565,14 @@ func (e *encoder) writeSOS(m image.Image) {
 	e.emit(0x7f, 7)
 }
 
+// writeUnknownApp writes out any appX segments we have that we didn't
+// understand.
+func (e *encoder) writeUnknownApp(ctx context.Context, m *Metadata) error {
+	return nil
+}
+
 // DefaultQuality is the default quality encoding parameter.
 const DefaultQuality = 75
-
-// EncodeExtended writes the image m to w in JPEG 4:2:0 baseline format with the given options. Default parameters are used in no options are passed.
-func EncodeExtended(w io.Writer, m image.Image, o ...image.WriteOption) error {
-	panic("unimplemented")
-}
 
 // Options are the jpeg-specific encoding parameters.
 // Quality ranges from 1 to 100 inclusive, higher is better.
@@ -581,6 +586,37 @@ func (_ Options) IsImageWriteOption() {
 // Encode writes the Image m to w in JPEG 4:2:0 baseline format with the given
 // options. Default parameters are used if a nil *Options is passed.
 func Encode(w io.Writer, m image.Image, o *Options) error {
+	return EncodeExtended(context.TODO(), w, m, o)
+}
+
+// EncodeExtended writes the image m to w in JPEG 4:2:0 baseline format with the given options. Default parameters are used in no options are passed.
+func EncodeExtended(ctx context.Context, w io.Writer, m image.Image, opts ...image.WriteOption) error {
+	var metadata *Metadata
+	var o *Options
+
+	for _, opt := range opts {
+
+		switch do := opt.(type) {
+		case *Options:
+			if o != nil {
+				return fmt.Errorf("multiple quality options specified")
+			}
+			o = do
+		case *image.MetadataWriteOption:
+			if metadata != nil {
+				return fmt.Errorf("Multiple metadata specified")
+			}
+			dm, ok := do.Metadata.(*Metadata)
+
+			if !ok {
+				return fmt.Errorf("Invalid metadata type %T passed", do.Metadata)
+			}
+			metadata = dm
+		default:
+			log.Printf("Unknown write type %T passed", opt)
+		}
+	}
+
 	b := m.Bounds()
 	if b.Dx() >= 1<<16 || b.Dy() >= 1<<16 {
 		return errors.New("jpeg: image is too large to encode")
@@ -632,6 +668,14 @@ func Encode(w io.Writer, m image.Image, o *Options) error {
 	e.buf[0] = 0xff
 	e.buf[1] = 0xd8
 	e.write(e.buf[:2])
+	if metadata != nil {
+		if metadata.appX != nil {
+			err := e.writeUnknownApp(ctx, metadata)
+			if err != nil {
+				return err
+			}
+		}
+	}
 	// Write the quantization tables.
 	e.writeDQT()
 	// Write the image dimensions.

@@ -99,7 +99,10 @@ func main() {
 		}
 		fmt.Printf("Version %v\n", jm.Version)
 		fmt.Printf("%v x %v %v\n", jm.XDensity, jm.YDensity, jm.Units)
-		fmt.Printf("Has thumbnail: %v\n", jm.HasThumbnail)
+		fmt.Printf("Has thumbnail: %v\n", jm.Thumbnail != nil)
+		if jm.Thumbnail != nil {
+			fmt.Printf("  thumbnail is %v x %v\n", jm.XThumbnail, jm.YThumbnail)
+		}
 	default:
 		log.Fatalf("unknown image type %v", t)
 	}

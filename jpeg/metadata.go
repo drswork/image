@@ -91,9 +91,13 @@ type Metadata struct {
 	XDensity uint16
 	// YDensity holds the pixels-per
 	YDensity uint16
-	// HasThumbnail is true if the image has a thumbnail
-	HasThumbnail bool
-	Thumbnail    image.Image
+
+	// Thumbnail is the thumbnail image in the APP9 JFIF segment.
+	Thumbnail image.Image
+	// XThumbnail is the x dimension of the thumbnail image
+	XThumbnail uint8
+	// YThumbnail is the y dimension of the thumbnail image
+	YThumbnail uint8
 
 	// appX holds all the unknown chunks of data in APPx segments.
 	appX map[byte][][]byte
@@ -254,7 +258,18 @@ func (d *decoder) processApp0(ctx context.Context, n int, opts ...image.ReadOpti
 			return nil
 		}
 		d.metadata.YDensity = binary.BigEndian.Uint16(buf[10:])
-		d.metadata.HasThumbnail = n > 12
+
+		d.metadata.XThumbnail = buf[12]
+		d.metadata.YThumbnail = buf[13]
+
+		// If either thumbnail dimension is zero then we have no thumbnail.
+		if buf[12] == 0 || buf[13] == 0 {
+			return nil
+		}
+
+		if err := d.decodeThumbnail(ctx, buf[14:], opts...); err != nil {
+			return err
+		}
 	default:
 		// This is an app0 segment we don't understand so just save it off.
 		d.saveAppN(ctx, app0Marker, buf, opts...)
@@ -396,5 +411,27 @@ func (m *Metadata) validate() error {
 		}
 	}
 
+	return nil
+}
+
+// decodeThumbnail extracts an APP0 JFIF segment thumbnail and
+// attaches it to the metadata struct.
+func (d *decoder) decodeThumbnail(ctx context.Context, buf []byte, opts ...image.ReadOption) error {
+
+	xw := int(d.metadata.XThumbnail)
+	yw := int(d.metadata.YThumbnail)
+	expect := xw * yw * 3
+	if expect != len(buf) {
+		return fmt.Errorf("thumbnail size error, got %v bytes, want %v bytes", len(buf), expect)
+	}
+
+	// Build the image
+	img := image.NewRGBA(image.Rect(0, 0, xw, yw))
+	for x := 0; x < xw; x++ {
+		for y := 0; y < yw; y++ {
+			img.SetRGBA(x, y, color.RGBA{buf[x+y*xw], buf[x+y*xw+1], buf[x+y*xw+2], 0})
+		}
+	}
+	d.metadata.Thumbnail = img
 	return nil
 }

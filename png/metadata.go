@@ -722,7 +722,8 @@ func readData(ctx context.Context, d *decoder, length uint32) ([]byte, error) {
 	return tb, nil
 }
 
-func (m *Metadata) validateMetadata() error {
+// validate checks to make sure that the metadata struct conforms to the rules.
+func (m *Metadata) validate() error {
 	// Validate that the ICC profile name is valid.
 	// Must be < 80 characters
 	if len(m.iccName) > 79 {

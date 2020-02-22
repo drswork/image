@@ -328,3 +328,21 @@ func (d *decoder) processUnknownApp(ctx context.Context, app byte, n int, opts .
 	return nil
 
 }
+
+func (m *Metadata) validate() error {
+
+	if m.appX != nil {
+		for k, v := range m.appX {
+			if k < app0Marker || k > app15Marker {
+				return fmt.Errorf("Invalid segment marker %v", k)
+			}
+			for i, val := range v {
+				if len(val) > maxSegmentSize {
+					return fmt.Errorf("Entry %v for segment %v is %v bytes, larger than %v maximum", i, k, len(val), maxSegmentSize)
+				}
+			}
+		}
+	}
+
+	return nil
+}

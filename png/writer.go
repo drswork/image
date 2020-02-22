@@ -909,7 +909,7 @@ func (enc *Encoder) EncodeExtended(ctx context.Context, w io.Writer, m image.Ima
 			}
 			metadata = lo
 			// Make sure the metadata is OK.
-			if err := metadata.validateMetadata(); err != nil {
+			if err := metadata.validate(); err != nil {
 				return err
 			}
 		default:

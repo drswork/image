@@ -607,6 +607,9 @@ func EncodeExtended(ctx context.Context, w io.Writer, m image.Image, opts ...ima
 				return fmt.Errorf("Multiple metadata specified")
 			}
 			metadata = do
+			if err := metadata.validate(); err != nil {
+				return err
+			}
 		default:
 			log.Printf("Unknown write type %T passed", opt)
 		}

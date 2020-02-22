@@ -85,6 +85,8 @@ const (
 	app15Marker = 0xef
 )
 
+const maxSegmentSize = 65533
+
 // See https://www.sno.phy.queensu.ca/~phil/exiftool/TagNames/JPEG.html#Adobe
 const (
 	adobeTransformUnknown = 0

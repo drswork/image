@@ -11,6 +11,7 @@ import (
 
 	"github.com/drswork/image"
 	"github.com/drswork/image/gif"
+	"github.com/drswork/image/jpeg"
 	"github.com/drswork/image/png"
 )
 
@@ -92,6 +93,11 @@ func main() {
 			}
 		}
 	case "jpeg":
+		jm, ok := m.(*jpeg.Metadata)
+		if !ok {
+			log.Fatalf("Bad metadata, should be type jpeg, is %T", m)
+		}
+		fmt.Printf("Width: %v\n", jm.Width)
 	default:
 		log.Fatalf("unknown image type %v", t)
 	}

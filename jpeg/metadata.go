@@ -1,11 +1,29 @@
 package jpeg
 
 import (
+	"bytes"
 	"context"
+	"fmt"
+	"log"
 
 	"github.com/drswork/image"
 	"github.com/drswork/image/color"
 	"github.com/drswork/image/metadata"
+)
+
+// List of known metadata bits and the segments they appear in.
+const (
+	// APP0
+	jfifMetadata = "JFIF"
+	// APP1
+	exifMetadata = "Exif"
+	xmpMetadata  = "http://ns.adobe.com/xap/1.0/"
+	// APP2
+	iccMetadata = "ICC_PROFILE"
+	// APP13
+	photoshopMetadata = "Photoshop 3.0"
+	// APP14
+	adobeMetadata = "Adobe"
 )
 
 type Metadata struct {
@@ -46,8 +64,15 @@ type Metadata struct {
 	// only be set if the metadata decoding was deferred and the
 	// metadata hasn't been accessed. Decoding the ICC data will discard
 	// this cache.
-	rawIcc  []byte
-	iccName string
+	rawIcc []byte
+	// iccSegmentCount holds the number of ICC segments we should be
+	// seeing. ICC data may be larger than 64k bytes so it can be
+	// sharded in the file and we have to reassemble.
+	iccSegmentCount byte
+	// iccSegmentsSeen holds the number of ICC segments we've actually
+	// seen so far, so we can validate whether we've read everything or
+	// not.
+	iccSegmentsSeen int
 
 	// Width holds the image width, in pixels
 	Width int
@@ -55,6 +80,9 @@ type Metadata struct {
 	Height int
 	// ColorModel holds the image color model
 	ColorModel color.Model
+
+	// appX holds all the unknown chunks of data in APPx segments.
+	appX map[byte][][]byte
 }
 
 func (m *Metadata) ImageMetadataFormat() string {
@@ -157,34 +185,141 @@ func (m *Metadata) SetIcc(i *metadata.ICC) {
 	m.rawIcc = nil
 }
 
-func (d *decoder) processApp0(ctx context.Context, n int) error {
-	if n < 5 {
-		return d.ignore(ctx, n)
-	}
-	if err := d.readFull(ctx, d.tmp[:5]); err != nil {
+func (d *decoder) processApp0(ctx context.Context, n int, opts ...image.ReadOption) error {
+	buf := make([]byte, n)
+	err := d.readFull(ctx, buf)
+	if err != nil {
 		return err
 	}
-	n -= 5
 
-	d.jfif = d.tmp[0] == 'J' && d.tmp[1] == 'F' && d.tmp[2] == 'I' && d.tmp[3] == 'F' && d.tmp[4] == '\x00'
+	off := bytes.IndexByte(buf, 0)
+	tag := string(buf[:off])
 
-	if n > 0 {
-		return d.ignore(ctx, n)
+	switch tag {
+	case jfifMetadata:
+		d.jfif = true
+	default:
+		// This is an app0 segment we don't understand so just save it off.
+		d.saveAppN(ctx, app0Marker, buf, opts...)
 	}
 	return nil
-
 }
 
-func (d *decoder) processApp1(ctx context.Context, n int) error {
-	// The app1 block contains EXIF, XMP, and extended XMP data. Amongst other things, though these are the only ones we're going to worry about at the moment.
+func (d *decoder) processApp1(ctx context.Context, n int, opts ...image.ReadOption) error {
+	// The app1 block contains EXIF, XMP, and extended XMP data. Amongst
+	// other things, though these are the only ones we're going to worry
+	// about at the moment.
+	buf := make([]byte, n)
+	err := d.readFull(ctx, buf)
+	if err != nil {
+		return err
+	}
+
+	off := bytes.IndexByte(buf, 0)
+	tag := string(buf[:off])
+
+	switch tag {
+	default:
+		// An app1 segment we don't understand, so just save it for later
+		d.saveAppN(ctx, app1Marker, buf, opts...)
+	}
 	return nil
 }
 
 // processApp2 handles the APP2 block.
-func (d *decoder) processApp2(ctx context.Context, n int) error {
+func (d *decoder) processApp2(ctx context.Context, n int, opts ...image.ReadOption) error {
 	// This block holds the ICC profile (maybe). Note that the ICC
 	// profile may be larger than the largest block size (a touch less
 	// than 64k) and therefore may span multiple blocks. Because of
 	// course it does.
+	buf := make([]byte, n)
+	err := d.readFull(ctx, buf)
+	if err != nil {
+		return err
+	}
+
+	off := bytes.IndexByte(buf, 0)
+	tag := string(buf[:off])
+
+	switch tag {
+	case iccMetadata:
+		index := buf[off+1]
+		count := buf[off+2]
+		// Have we seen a count of the number of ICC segments we should
+		// see? If not then save what we have here.
+		if d.metadata.iccSegmentCount == 0 {
+			d.metadata.iccSegmentCount = count
+		}
+		// Does the segment count in this segment match the segment count
+		// in the last segment we saw? If not it's an error and we should
+		// bail.
+		if d.metadata.iccSegmentCount != count {
+			return fmt.Errorf("Invalid icc segment counts; orig %v, now %v", d.metadata.iccSegmentCount, count)
+		}
+		d.metadata.iccSegmentsSeen++
+		// Have we seen too many icc segments?
+		if d.metadata.iccSegmentsSeen > int(d.metadata.iccSegmentCount) {
+			return fmt.Errorf("Too many icc segments; want %v, got %v", d.metadata.iccSegmentCount, d.metadata.iccSegmentsSeen)
+		}
+		// This assumes we see things in order, which is dangerous.
+		if index == 1 {
+			d.metadata.rawIcc = buf[off+3:]
+		} else {
+			d.metadata.rawIcc = append(d.metadata.rawIcc, buf[off+3:]...)
+		}
+	default:
+		// This is an app2 segment we don't understand so just save it off.
+		d.saveAppN(ctx, app2Marker, buf, opts...)
+	}
+
 	return nil
+}
+
+func (d *decoder) processApp14(ctx context.Context, n int) error {
+	buf := make([]byte, n)
+	err := d.readFull(ctx, buf)
+	if err != nil {
+		log.Printf("err is %v", err)
+		return err
+	}
+
+	off := bytes.IndexByte(buf, 0)
+	log.Printf("Offset %v", off)
+	if off != -1 {
+		log.Printf("string: %v", string(buf[:off]))
+	}
+	log.Printf("first byte: %v", buf[off+1])
+	tag := string(buf[:off])
+	switch tag {
+	case adobeMetadata:
+		d.adobeTransformValid = true
+		d.adobeTransform = buf[11]
+	default:
+		// This is an APP14 chunk we don't understand, so just save it.
+		d.saveAppN(ctx, app14Marker, buf)
+	}
+
+	return nil
+}
+
+func (d *decoder) saveAppN(ctx context.Context, n byte, buf []byte, opts ...image.ReadOption) error {
+	if d.metadata.appX == nil {
+		d.metadata.appX = make(map[byte][][]byte)
+	}
+	d.metadata.appX[n] = append(d.metadata.appX[n], buf)
+	return nil
+
+}
+
+func (d *decoder) processUnknownApp(ctx context.Context, app byte, n int, opts ...image.ReadOption) error {
+	buf := make([]byte, n)
+	err := d.readFull(ctx, buf)
+	if err != nil {
+		return err
+	}
+
+	// This is an app type we don't understand, so just save it for now.
+	d.saveAppN(ctx, app, buf)
+	return nil
+
 }

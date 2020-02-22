@@ -11,6 +11,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	"log"
 
 	"github.com/drswork/image"
 	"github.com/drswork/image/color"
@@ -67,6 +68,19 @@ const (
 	// but in practice, their use is described at
 	// https://www.sno.phy.queensu.ca/~phil/exiftool/TagNames/JPEG.html
 	app0Marker  = 0xe0
+	app1Marker  = 0xe1
+	app2Marker  = 0xe2
+	app3Marker  = 0xe3
+	app4Marker  = 0xe4
+	app5Marker  = 0xe5
+	app6Marker  = 0xe6
+	app7Marker  = 0xe7
+	app8Marker  = 0xe8
+	app9Marker  = 0xe9
+	app10Marker = 0xea
+	app11Marker = 0xeb
+	app12Marker = 0xec
+	app13Marker = 0xed
 	app14Marker = 0xee
 	app15Marker = 0xef
 )
@@ -496,26 +510,6 @@ func (d *decoder) processDRI(ctx context.Context, n int) error {
 	return nil
 }
 
-func (d *decoder) processApp14Marker(ctx context.Context, n int) error {
-	if n < 12 {
-		return d.ignore(ctx, n)
-	}
-	if err := d.readFull(ctx, d.tmp[:12]); err != nil {
-		return err
-	}
-	n -= 12
-
-	if d.tmp[0] == 'A' && d.tmp[1] == 'd' && d.tmp[2] == 'o' && d.tmp[3] == 'b' && d.tmp[4] == 'e' {
-		d.adobeTransformValid = true
-		d.adobeTransform = d.tmp[11]
-	}
-
-	if n > 0 {
-		return d.ignore(ctx, n)
-	}
-	return nil
-}
-
 // decode reads a JPEG image from r and returns it as an image.Image.
 func (d *decoder) decode(ctx context.Context, r io.Reader, decodeImage, decodeMetdata bool) (image.Image, error) {
 	d.r = r
@@ -629,11 +623,22 @@ func (d *decoder) decode(ctx context.Context, r io.Reader, decodeImage, decodeMe
 			err = d.processDRI(ctx, n)
 			// }
 		case app0Marker:
+			log.Printf("Got an app0")
 			err = d.processApp0(ctx, n)
+		case app1Marker:
+			log.Printf("Got an app1")
+			err = d.processApp1(ctx, n)
+		case app2Marker:
+			log.Printf("Got an app2")
+			err = d.processApp2(ctx, n)
 		case app14Marker:
-			err = d.processApp14Marker(ctx, n)
+			log.Printf("Got an app14")
+			err = d.processApp14(ctx, n)
 		default:
-			if app0Marker <= marker && marker <= app15Marker || marker == comMarker {
+			if marker >= app0Marker && marker <= app15Marker {
+				// Got an APPx segment we dont understand, so just save it.
+				d.processUnknownApp(ctx, marker, n)
+			} else if marker == comMarker {
 				err = d.ignore(ctx, n)
 			} else if marker < 0xc0 { // See Table B.1 "Marker code assignments".
 				err = FormatError("unknown marker")

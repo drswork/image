@@ -3,6 +3,7 @@ package jpeg
 import (
 	"bytes"
 	"context"
+	"encoding/binary"
 	"fmt"
 	"log"
 
@@ -14,7 +15,8 @@ import (
 // List of known metadata bits and the segments they appear in.
 const (
 	// APP0
-	jfifMetadata = "JFIF"
+	jfifMetadata          = "JFIF"
+	jfifExtensionMetadata = "JFXX"
 	// APP1
 	exifMetadata = "Exif"
 	xmpMetadata  = "http://ns.adobe.com/xap/1.0/"
@@ -81,8 +83,41 @@ type Metadata struct {
 	// ColorModel holds the image color model
 	ColorModel color.Model
 
+	// The version of this JPEG file
+	Version Version
+	// Units holds the units for the ppX calculations
+	Units Units
+	// XDensity holds the pixels-per-unit for the X axis
+	XDensity uint16
+	// YDensity holds the pixels-per
+	YDensity uint16
+	// HasThumbnail is true if the image has a thumbnail
+	HasThumbnail bool
+	Thumbnail    image.Image
+
 	// appX holds all the unknown chunks of data in APPx segments.
 	appX map[byte][][]byte
+}
+
+type Units byte
+type Version uint16
+
+func (u Units) String() string {
+	switch u {
+	case 0:
+		return "Unitless"
+	case 1:
+		return "Inch"
+	case 2:
+		return "Centimeter"
+	default:
+		return "Unknown"
+	}
+
+}
+
+func (v Version) String() string {
+	return fmt.Sprintf("%d.%02d", v>>8, v&0xff)
 }
 
 func (m *Metadata) ImageMetadataFormat() string {
@@ -203,6 +238,23 @@ func (d *decoder) processApp0(ctx context.Context, n int, opts ...image.ReadOpti
 	switch tag {
 	case jfifMetadata:
 		d.jfif = true
+		if len(buf) <= 5 {
+			return nil
+		}
+		d.metadata.Version = Version(binary.BigEndian.Uint16(buf[5:]))
+		if len(buf) <= 7 {
+			return nil
+		}
+		d.metadata.Units = Units(d.tmp[7])
+		if len(buf) <= 8 {
+			return nil
+		}
+		d.metadata.XDensity = binary.BigEndian.Uint16(buf[8:])
+		if len(buf) <= 10 {
+			return nil
+		}
+		d.metadata.YDensity = binary.BigEndian.Uint16(buf[10:])
+		d.metadata.HasThumbnail = n > 12
 	default:
 		// This is an app0 segment we don't understand so just save it off.
 		d.saveAppN(ctx, app0Marker, buf, opts...)

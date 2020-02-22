@@ -11,7 +11,6 @@ import (
 	"context"
 	"errors"
 	"io"
-	"log"
 
 	"github.com/drswork/image"
 	"github.com/drswork/image/color"
@@ -625,16 +624,12 @@ func (d *decoder) decode(ctx context.Context, r io.Reader, decodeImage, decodeMe
 			err = d.processDRI(ctx, n)
 			// }
 		case app0Marker:
-			log.Printf("Got an app0")
 			err = d.processApp0(ctx, n)
 		case app1Marker:
-			log.Printf("Got an app1")
 			err = d.processApp1(ctx, n)
 		case app2Marker:
-			log.Printf("Got an app2")
 			err = d.processApp2(ctx, n)
 		case app14Marker:
-			log.Printf("Got an app14")
 			err = d.processApp14(ctx, n)
 		default:
 			if marker >= app0Marker && marker <= app15Marker {

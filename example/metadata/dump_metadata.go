@@ -97,7 +97,9 @@ func main() {
 		if !ok {
 			log.Fatalf("Bad metadata, should be type jpeg, is %T", m)
 		}
-		fmt.Printf("Width: %v\n", jm.Width)
+		fmt.Printf("Version %v\n", jm.Version)
+		fmt.Printf("%v x %v %v\n", jm.XDensity, jm.YDensity, jm.Units)
+		fmt.Printf("Has thumbnail: %v\n", jm.HasThumbnail)
 	default:
 		log.Fatalf("unknown image type %v", t)
 	}

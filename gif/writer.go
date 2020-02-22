@@ -9,11 +9,12 @@ import (
 	"bytes"
 	"compress/lzw"
 	"errors"
+	"io"
+
 	"github.com/drswork/image"
 	"github.com/drswork/image/color"
 	"github.com/drswork/image/color/palette"
 	"github.com/drswork/image/draw"
-	"io"
 )
 
 // Graphic control extension fields.
@@ -412,6 +413,10 @@ func EncodeAll(w io.Writer, g *GIF) error {
 	e.writeByte(sTrailer)
 	e.flush()
 	return e.err
+}
+
+// GIF options are metadata write options.
+func (_ *Options) IsImageWriteOption() {
 }
 
 // Encode writes the Image m to w in GIF format.

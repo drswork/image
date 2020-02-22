@@ -89,6 +89,11 @@ func (m *Metadata) ImageMetadataFormat() string {
 	return "jpeg"
 }
 
+// IsImageWriteOption lets a jpeg metadata struct be passed as a write
+// option to EncodeExtended.
+func (m *Metadata) IsImageWriteOption() {
+}
+
 func (m *Metadata) GetConfig() image.Config {
 	return image.Config{ColorModel: m.ColorModel, Height: m.Height, Width: m.Width}
 }

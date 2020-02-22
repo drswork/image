@@ -46,6 +46,11 @@ func (m *Metadata) ImageMetadataFormat() string {
 	return "gif"
 }
 
+// IsImageWriteOption lets a gif metadata struct be passed as a write
+// option to EncodeExtended.
+func (m *Metadata) IsImageWriteOption() {
+}
+
 func (m *Metadata) GetConfig() image.Config {
 	return image.Config{Height: m.Height, Width: m.Width, ColorModel: m.ColorModel}
 }

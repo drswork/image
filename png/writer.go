@@ -903,12 +903,11 @@ func (enc *Encoder) EncodeExtended(ctx context.Context, w io.Writer, m image.Ima
 	//  Run through all the opts.
 	for _, o := range opts {
 		switch lo := o.(type) {
-		case image.MetadataWriteOption:
-			var ok bool
-			metadata, ok = lo.Metadata.(*Metadata)
-			if !ok {
-				return fmt.Errorf("Metadata of type %T given to PNG encoder", lo.Metadata)
+		case *Metadata:
+			if metadata != nil {
+				return fmt.Errorf("Multiple metadata passed")
 			}
+			metadata = lo
 			// Make sure the metadata is OK.
 			if err := metadata.validateMetadata(); err != nil {
 				return err

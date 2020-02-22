@@ -602,16 +602,11 @@ func EncodeExtended(ctx context.Context, w io.Writer, m image.Image, opts ...ima
 				return fmt.Errorf("multiple quality options specified")
 			}
 			o = do
-		case *image.MetadataWriteOption:
+		case *Metadata:
 			if metadata != nil {
 				return fmt.Errorf("Multiple metadata specified")
 			}
-			dm, ok := do.Metadata.(*Metadata)
-
-			if !ok {
-				return fmt.Errorf("Invalid metadata type %T passed", do.Metadata)
-			}
-			metadata = dm
+			metadata = do
 		default:
 			log.Printf("Unknown write type %T passed", opt)
 		}

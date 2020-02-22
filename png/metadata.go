@@ -93,6 +93,11 @@ func (m *Metadata) ImageMetadataFormat() string {
 	return "png"
 }
 
+// IsImageWriteOption lets a png metadata struct be passed as a write
+// option to EncodeExtended.
+func (m *Metadata) IsImageWriteOption() {
+}
+
 // GetConfig returns the image.Config data extracted from the image's metadata.
 func (m *Metadata) GetConfig() image.Config {
 	return image.Config{

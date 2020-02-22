@@ -127,7 +127,7 @@ func encodeDecode(m image.Image) (image.Image, error) {
 func extendedEncodeDecode(orig image.Image, m *Metadata) (image.Image, image.Metadata, error) {
 	var b bytes.Buffer
 	ctx := context.TODO()
-	err := EncodeExtended(ctx, &b, orig, image.MetadataWriteOption{m})
+	err := EncodeExtended(ctx, &b, orig, m)
 	if err != nil {
 		return nil, nil, err
 	}

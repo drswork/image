@@ -210,6 +210,12 @@ type LimitOptions struct {
 func (_ LimitOptions) IsImageReadOption() {
 }
 
+// IsImaegWriteOption allows a LimitOptions struct get passed when
+// writing out an image to allow size limits to be placed on the
+// output file.
+func (_ LimitOptions) IsImageWriteOption() {
+}
+
 // DamageHandlingOptions hold settings that may allow reader code to
 // read damaged or malformed image files. These options should only be
 // provided when code is explicitly trying to read known-damaged image
@@ -287,17 +293,6 @@ type ImageTransformOptions struct {
 // IsImageReadOption is a no-op finction which exists to satisfy the
 // ReadOption interface.
 func (_ ImageTransformOptions) IsImageReadOption() {
-}
-
-// MetadataWriteOption contains the metadata that should be written
-// out with the image file. Metadata is an interface ty
-type MetadataWriteOption struct {
-	Metadata Metadata
-}
-
-// IsImageWriteOption is a no-op function which exists to satisfy the
-// WriteOption interface.
-func (_ MetadataWriteOption) IsImageWriteOption() {
 }
 
 // WriteOption holds options for writing image data out. Each image

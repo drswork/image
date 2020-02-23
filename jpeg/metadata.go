@@ -398,6 +398,10 @@ func (d *decoder) processUnknownApp(ctx context.Context, app byte, n int, opts .
 
 func (m *Metadata) validate() error {
 
+	// Check to see if there are any APPx segments registered to write
+	// out. If so we make sure that they're valid as best we can, which
+	// means we check to make sure they're actually APP entries, and
+	// that their size will fit in a single segment.
 	if m.appX != nil {
 		for k, v := range m.appX {
 			if k < app0Marker || k > app15Marker {

@@ -18,8 +18,9 @@ const (
 	jfifMetadata          = "JFIF"
 	jfifExtensionMetadata = "JFXX"
 	// APP1
-	exifMetadata = "Exif"
-	xmpMetadata  = "http://ns.adobe.com/xap/1.0/"
+	exifMetadata        = "Exif"
+	xmpMetadata         = "http://ns.adobe.com/xap/1.0/"
+	extendedXmpMetadata = "http://ns.adobe.com/xmp/extension/"
 	// APP2
 	iccMetadata = "ICC_PROFILE"
 	// APP13

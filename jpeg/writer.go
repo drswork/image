@@ -572,26 +572,13 @@ func (e *encoder) writeUnknownApp(ctx context.Context, m *Metadata) {
 		return
 	}
 
-	// Any APP0 stuff should be first.
-	if v, ok := m.appX[app0Marker]; ok {
-		for _, i := range v {
-			e.writeMarkerHeader(app0Marker, len(i))
-			if e.err != nil {
-				return
-			}
-			e.write(i)
-			if e.err != nil {
-				return
-			}
-		}
-	}
-
-	// Just run through the segments in random order.
-	for k, v := range m.appX {
-		// We've already done app0.
-		if k == app0Marker {
+	// Run through the segments in order
+	for k := uint8(app0Marker); k <= app15Marker; k++ {
+		v, ok := m.appX[k]
+		if !ok {
 			continue
 		}
+
 		for _, i := range v {
 			e.writeMarkerHeader(k, len(i))
 			if e.err != nil {

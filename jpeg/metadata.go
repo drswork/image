@@ -101,10 +101,10 @@ type Metadata struct {
 	YThumbnail uint8
 
 	// appX holds all the unknown chunks of data in APPx segments.
-	appX map[byte][][]byte
+	appX map[uint8][][]byte
 }
 
-type Units byte
+type Units uint8
 type Version uint16
 
 func (u Units) String() string {

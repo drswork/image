@@ -567,8 +567,42 @@ func (e *encoder) writeSOS(m image.Image) {
 
 // writeUnknownApp writes out any appX segments we have that we didn't
 // understand.
-func (e *encoder) writeUnknownApp(ctx context.Context, m *Metadata) error {
-	return nil
+func (e *encoder) writeUnknownApp(ctx context.Context, m *Metadata) {
+	if e.err != nil {
+		return
+	}
+
+	// Any APP0 stuff should be first.
+	if v, ok := m.appX[app0Marker]; ok {
+		for _, i := range v {
+			e.writeMarkerHeader(app0Marker, len(i))
+			if e.err != nil {
+				return
+			}
+			e.write(i)
+			if e.err != nil {
+				return
+			}
+		}
+	}
+
+	// Just run through the segments in random order.
+	for k, v := range m.appX {
+		// We've already done app0.
+		if k == app0Marker {
+			continue
+		}
+		for _, i := range v {
+			e.writeMarkerHeader(k, len(i))
+			if e.err != nil {
+				return
+			}
+			e.write(i)
+			if e.err != nil {
+				return
+			}
+		}
+	}
 }
 
 // DefaultQuality is the default quality encoding parameter.
@@ -666,13 +700,8 @@ func EncodeExtended(ctx context.Context, w io.Writer, m image.Image, opts ...ima
 	e.buf[0] = 0xff
 	e.buf[1] = 0xd8
 	e.write(e.buf[:2])
-	if metadata != nil {
-		if metadata.appX != nil {
-			err := e.writeUnknownApp(ctx, metadata)
-			if err != nil {
-				return err
-			}
-		}
+	if metadata != nil && metadata.appX != nil {
+		e.writeUnknownApp(ctx, metadata)
 	}
 	// Write the quantization tables.
 	e.writeDQT()

@@ -24,3 +24,17 @@ with metadata.
 
 The existing API has been maintained for drop-in compatibility with
 the current standard library.
+
+### Deferred image decoding
+
+Image files may be read in without decoding the actual image data, and
+these deferred images may be written out without incurring the expense
+and potential image loss of decoding or encoding them. This is useful
+for code which only wants to examine image metadata, but it also
+allows programs that want to mutate an image's metadata without
+mutating the image itself to do so inexpensively and without altering
+image quality.
+
+This is especially useful for lossy image formats such as jpeg --
+deferred image reading and writing allows programs to update jpeg
+metadata without having to re-encode the image.

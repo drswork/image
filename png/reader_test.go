@@ -331,6 +331,31 @@ func sng(w io.WriteCloser, filename string, png image.Image) {
 	io.WriteString(w, "}\n")
 }
 
+func TestDeferredReader(t *testing.T) {
+	names := filenames
+	if testing.Short() {
+		names = filenamesShort
+	}
+	for _, fn := range names {
+		// Read the .png file.
+		img, err := readPNG(context.TODO(), "testdata/pngsuite/"+fn+".png")
+		if err != nil {
+			t.Error(fn, err)
+			continue
+		}
+		di, _, err := readPNGDeferred(context.TODO(), "testdata/pngsuite/"+fn+".png")
+		if err != nil {
+			t.Error(fn, err)
+			continue
+		}
+
+		err = diff(img, di)
+		if err != nil {
+			t.Error(fn, err)
+		}
+	}
+}
+
 func TestReader(t *testing.T) {
 	names := filenames
 	if testing.Short() {
@@ -491,6 +516,50 @@ func TestSkipImage(t *testing.T) {
 	})
 	if err != nil {
 		t.Fatalf("Image-free decode failed: %v", err)
+	}
+}
+
+func TestDeferImage(t *testing.T) {
+	ctx := context.TODO()
+	filenames := []string{"testdata/gray-gradient.png", "testdata/glep.png"}
+	for _, filename := range filenames {
+		f, err := os.Open(filename)
+		if err != nil {
+			t.Fatalf("Unable to open test file: %v", filename)
+		}
+		defer f.Close()
+		di, _, err := DecodeExtended(ctx, f, image.DataDecodeOptions{
+			DecodeImage:    image.DeferData,
+			DecodeMetadata: image.DeferData,
+		})
+		if err != nil {
+			t.Fatalf("Deferred decode failed: %v", err)
+		}
+		f1, err := os.Open(filename)
+		if err != nil {
+			t.Fatalf("Unable to open alt test file: %v", filename)
+		}
+		defer f1.Close()
+		i, _, err := DecodeExtended(ctx, f1, image.DataDecodeOptions{
+			DecodeImage:    image.DecodeData,
+			DecodeMetadata: image.DeferData,
+		})
+
+		dib := di.Bounds()
+		ib := i.Bounds()
+		if dib != ib {
+			t.Fatalf("Deferred bounds check failed. Got %v, want %v", dib, ib)
+		}
+
+		for x := dib.Min.X; x <= dib.Max.X; x++ {
+			for y := dib.Min.Y; y <= dib.Max.Y; y++ {
+				dip := di.At(x, y)
+				ip := i.At(x, y)
+				if dip != ip {
+					t.Fatalf("image differs at (%v,%v): got %v, want %v", x, y, dip, ip)
+				}
+			}
+		}
 	}
 }
 

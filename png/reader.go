@@ -8,6 +8,7 @@
 package png
 
 import (
+	"bytes"
 	"compress/zlib"
 	"context"
 	"encoding/binary"
@@ -16,6 +17,7 @@ import (
 	"hash"
 	"hash/crc32"
 	"io"
+	"log"
 
 	"github.com/drswork/image"
 	"github.com/drswork/image/color"
@@ -153,6 +155,7 @@ func (d *decoder) parseIHDR(ctx context.Context, length uint32) error {
 		return FormatError("bad IHDR length")
 	}
 	if _, err := io.ReadFull(d.r, d.tmp[:13]); err != nil {
+		log.Printf("ihdr io err: %v", err)
 		return err
 	}
 	d.crc.Write(d.tmp[:13])
@@ -867,7 +870,7 @@ func (d *decoder) parseIEND(ctx context.Context, length uint32) error {
 	return d.verifyChecksum()
 }
 
-func (d *decoder) parseChunk(ctx context.Context, parseImage, parseMetadata bool) error {
+func (d *decoder) parseChunk(ctx context.Context, parseImage image.DecodingOption, parseMetadata bool) error {
 	// Check and see if our context was cancelled or expired.
 	select {
 	case <-ctx.Done():
@@ -898,12 +901,47 @@ func (d *decoder) parseChunk(ctx context.Context, parseImage, parseMetadata bool
 			return chunkOrderError
 		}
 		d.stage = dsSeenIHDR
+		if parseImage == image.DeferData {
+			d.img.(*Deferred).ihdr, err = readData(ctx, d, length+4, false)
+			if err != nil {
+				return err
+			}
+			fixChecksum(d.img.(*Deferred).ihdr)
+			// We need to parse the ihdr chunk even if we're saving it. We
+			// need to swap in a fake reader and CRC calculator for this.
+			sr := d.r
+			scrc := d.crc
+			d.crc = crc32.NewIEEE()
+			d.r = bytes.NewReader(d.img.(*Deferred).ihdr)
+			err := d.parseIHDR(ctx, length)
+			d.crc = scrc
+			d.r = sr
+			return err
+		}
 		return d.parseIHDR(ctx, length)
+
 	case "PLTE":
 		if d.stage != dsSeenIHDR {
 			return chunkOrderError
 		}
 		d.stage = dsSeenPLTE
+		if parseImage == image.DeferData {
+			d.img.(*Deferred).plte, err = readData(ctx, d, length+4, false)
+			if err != nil {
+				return err
+			}
+			fixChecksum(d.img.(*Deferred).plte)
+			// We need to parse the plte chunk even if we're saving it. We
+			// need to swap in a fake reader and CRC calculator for this.
+			sr := d.r
+			scrc := d.crc
+			d.crc = crc32.NewIEEE()
+			d.r = bytes.NewReader(d.img.(*Deferred).plte)
+			err := d.parsePLTE(ctx, length)
+			d.crc = scrc
+			d.r = sr
+			return err
+		}
 		return d.parsePLTE(ctx, length)
 	case "tRNS":
 		if cbPaletted(d.cb) {
@@ -914,6 +952,23 @@ func (d *decoder) parseChunk(ctx context.Context, parseImage, parseMetadata bool
 			return chunkOrderError
 		}
 		d.stage = dsSeentRNS
+		if parseImage == image.DeferData {
+			d.img.(*Deferred).trns, err = readData(ctx, d, length+4, false)
+			if err != nil {
+				return err
+			}
+			fixChecksum(d.img.(*Deferred).trns)
+			// We need to parse the trns chunk even if we're saving it. We
+			// need to swap in a fake reader and CRC calculator for this.
+			sr := d.r
+			scrc := d.crc
+			d.crc = crc32.NewIEEE()
+			d.r = bytes.NewReader(d.img.(*Deferred).trns)
+			err := d.parsetRNS(ctx, length)
+			d.crc = scrc
+			d.r = sr
+			return err
+		}
 		return d.parsetRNS(ctx, length)
 	case "IDAT":
 		if d.stage < dsSeenIHDR || d.stage > dsSeenIDAT || (d.stage == dsSeenIHDR && cbPaletted(d.cb)) {
@@ -927,8 +982,16 @@ func (d *decoder) parseChunk(ctx context.Context, parseImage, parseMetadata bool
 			break
 		}
 		d.stage = dsSeenIDAT
-		if !parseImage {
+		switch parseImage {
+		case image.DiscardData:
 			return d.skipChunk(ctx, length)
+		case image.DeferData:
+			d.img.(*Deferred).idat, err = readData(ctx, d, length+4, false)
+			if err != nil {
+				return err
+			}
+			fixChecksum(d.img.(*Deferred).idat)
+			return nil
 		}
 		return d.parseIDAT(ctx, length)
 	case "IEND":
@@ -1069,9 +1132,6 @@ func DecodeExtended(ctx context.Context, r io.Reader, opts ...image.ReadOption) 
 		return nil, nil, nil
 	}
 
-	if opt.DecodeImage == image.DeferData {
-		return nil, nil, errors.New("Image parsing may not be deferred")
-	}
 	if opt.DecodeImage == image.DefaultDecodeOption {
 		opt.DecodeImage = image.DecodeData
 	}
@@ -1085,6 +1145,11 @@ func DecodeExtended(ctx context.Context, r io.Reader, opts ...image.ReadOption) 
 		metadata: &Metadata{},
 	}
 
+	// If we're deferring image reading then pre-fill the img field.
+	if opt.DecodeImage == image.DeferData {
+		d.img = &Deferred{}
+	}
+
 	if err := d.checkHeader(ctx); err != nil {
 		if err == io.EOF {
 			err = io.ErrUnexpectedEOF
@@ -1092,17 +1157,13 @@ func DecodeExtended(ctx context.Context, r io.Reader, opts ...image.ReadOption) 
 		return nil, nil, err
 	}
 
-	parseImage := false
 	parseMetadata := true
-	if opt.DecodeImage == image.DecodeData {
-		parseImage = true
-	}
 	if opt.DecodeMetadata >= image.DeferData {
 		parseMetadata = true
 	}
 
 	for d.stage != dsSeenIEND {
-		if err := d.parseChunk(ctx, parseImage, parseMetadata); err != nil {
+		if err := d.parseChunk(ctx, opt.DecodeImage, parseMetadata); err != nil {
 			if err == io.EOF {
 				err = io.ErrUnexpectedEOF
 			}

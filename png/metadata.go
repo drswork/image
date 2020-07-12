@@ -372,7 +372,7 @@ func (d *decoder) parseTEXT(ctx context.Context, length uint32) error {
 }
 
 func (d *decoder) parseZTXT(ctx context.Context, length uint32) error {
-	tb, err := readData(ctx, d, length)
+	tb, err := readData(ctx, d, length, true)
 	if err != nil {
 		return err
 	}
@@ -387,7 +387,7 @@ func (d *decoder) parseZTXT(ctx context.Context, length uint32) error {
 }
 
 func (d *decoder) parseITXT(ctx context.Context, length uint32) error {
-	tb, err := readData(ctx, d, length)
+	tb, err := readData(ctx, d, length, true)
 	if err != nil {
 		return err
 	}
@@ -506,25 +506,25 @@ func (d *decoder) parseSBIT(ctx context.Context, length uint32) error {
 	switch d.ct {
 	case ctGrayscale:
 		if length != 1 {
-			return FormatError("invalid sBIT length")
+			return FormatError("invalid sBIT length (not 1)")
 		}
 		sb.Gray = int(d.tmp[0])
 	case ctTrueColor, ctPaletted:
 		if length != 3 {
-			return FormatError("invalid sBIT length")
+			return FormatError("invalid sBIT length (not 3)")
 		}
 		sb.Red = int(d.tmp[0])
 		sb.Green = int(d.tmp[1])
 		sb.Blue = int(d.tmp[2])
 	case ctGrayscaleAlpha:
 		if length != 2 {
-			return FormatError("invalid sBIT length")
+			return FormatError("invalid sBIT length (not 2)")
 		}
 		sb.Gray = int(d.tmp[0])
 		sb.Alpha = int(d.tmp[1])
 	case ctTrueColorAlpha:
 		if length != 4 {
-			return FormatError("invalid sBIT length")
+			return FormatError("invalid sBIT length (not 4)")
 		}
 		sb.Red = int(d.tmp[0])
 		sb.Green = int(d.tmp[1])
@@ -701,10 +701,10 @@ func decodeItxtEntry(ctx context.Context, blob []byte) (string, string, string, 
 	return key, languageTag, translatedKeyword, value, nil
 }
 
-func readData(ctx context.Context, d *decoder, length uint32) ([]byte, error) {
+func readData(ctx context.Context, d *decoder, length uint32, ut bool) ([]byte, error) {
 	// Do we need to read less data than will fit in our buffer? If so
 	// use the buffer.
-	if length <= uint32(len(d.tmp)) {
+	if length <= uint32(len(d.tmp)) && ut {
 		if _, err := io.ReadFull(d.r, d.tmp[:length]); err != nil {
 			return nil, err
 		}

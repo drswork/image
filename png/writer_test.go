@@ -171,6 +171,41 @@ func TestWriter(t *testing.T) {
 	}
 }
 
+func TestWriteDeferred(t *testing.T) {
+	// The filenames variable is declared in reader_test.go.
+	names := filenames
+	if testing.Short() {
+		names = filenamesShort
+	}
+	ctx := context.TODO()
+	for _, fn := range names {
+		qfn := "testdata/pngsuite/" + fn + ".png"
+		// Read the image.
+		m0, err := readPNG(ctx, qfn)
+		if err != nil {
+			t.Error(fn, err)
+			continue
+		}
+		// Read the image again, encode it, and decode it.
+		m1, _, err := readPNGDeferred(ctx, qfn)
+		if err != nil {
+			t.Error(fn, err)
+			continue
+		}
+		m2, err := encodeDecode(m1)
+		if err != nil {
+			t.Error(fn, err)
+			continue
+		}
+		// Compare the two.
+		err = diff(m0, m2)
+		if err != nil {
+			t.Error(fn, err)
+			continue
+		}
+	}
+}
+
 func readPNGExtended(ctx context.Context, filename string) (image.Image, image.Metadata, error) {
 	f, err := os.Open(filename)
 	if err != nil {
@@ -178,6 +213,16 @@ func readPNGExtended(ctx context.Context, filename string) (image.Image, image.M
 	}
 	defer f.Close()
 	img, m, err := DecodeExtended(ctx, f, image.DataDecodeOptions{image.DecodeData, image.DecodeData})
+	return img, m, err
+}
+
+func readPNGDeferred(ctx context.Context, filename string) (image.Image, image.Metadata, error) {
+	f, err := os.Open(filename)
+	if err != nil {
+		return nil, nil, err
+	}
+	defer f.Close()
+	img, m, err := DecodeExtended(ctx, f, image.DataDecodeOptions{image.DeferData, image.DecodeData})
 	return img, m, err
 }
 

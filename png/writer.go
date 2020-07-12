@@ -917,12 +917,19 @@ func (enc *Encoder) EncodeExtended(ctx context.Context, w io.Writer, m image.Ima
 		}
 	}
 
-	// Obviously, negative widths and heights are invalid. Furthermore, the PNG
-	// spec section 11.2.2 says that zero is invalid. Excessively large images are
-	// also rejected.
-	mw, mh := int64(m.Bounds().Dx()), int64(m.Bounds().Dy())
-	if mw <= 0 || mh <= 0 || mw >= 1<<32 || mh >= 1<<32 {
-		return FormatError("invalid image size: " + strconv.FormatInt(mw, 10) + "x" + strconv.FormatInt(mh, 10))
+	// Check to see if we have a deferred image.
+	di, deferred := m.(*Deferred)
+
+	// If this isn't deferred then do some size validation. If it is
+	// then we assume that the file's OK since we read it.
+	if !deferred {
+		// Obviously, negative widths and heights are
+		// invalid. Furthermore, the PNG spec section 11.2.2 says that
+		// zero is invalid. Excessively large images are also rejected.
+		mw, mh := int64(m.Bounds().Dx()), int64(m.Bounds().Dy())
+		if mw <= 0 || mh <= 0 || mw >= 1<<32 || mh >= 1<<32 {
+			return FormatError("invalid image size: " + strconv.FormatInt(mw, 10) + "x" + strconv.FormatInt(mh, 10))
+		}
 	}
 
 	var e *encoder
@@ -943,43 +950,53 @@ func (enc *Encoder) EncodeExtended(ctx context.Context, w io.Writer, m image.Ima
 	e.m = m
 
 	var pal color.Palette
-	// cbP8 encoding needs PalettedImage's ColorIndexAt method.
-	if _, ok := m.(image.PalettedImage); ok {
-		pal, _ = m.ColorModel().(color.Palette)
-	}
-	if pal != nil {
-		if len(pal) <= 2 {
-			e.cb = cbP1
-		} else if len(pal) <= 4 {
-			e.cb = cbP2
-		} else if len(pal) <= 16 {
-			e.cb = cbP4
-		} else {
-			e.cb = cbP8
+
+	// Skip palette checking if this is a deferred image, since we're
+	// just splatting out whatever we read.
+	if !deferred {
+		// cbP8 encoding needs PalettedImage's ColorIndexAt method.
+		if _, ok := m.(image.PalettedImage); ok {
+			pal, _ = m.ColorModel().(color.Palette)
 		}
-	} else {
-		switch m.ColorModel() {
-		case color.GrayModel:
-			e.cb = cbG8
-		case color.Gray16Model:
-			e.cb = cbG16
-		case color.RGBAModel, color.NRGBAModel, color.AlphaModel:
-			if opaque(m) {
-				e.cb = cbTC8
+		if pal != nil {
+			if len(pal) <= 2 {
+				e.cb = cbP1
+			} else if len(pal) <= 4 {
+				e.cb = cbP2
+			} else if len(pal) <= 16 {
+				e.cb = cbP4
 			} else {
-				e.cb = cbTCA8
+				e.cb = cbP8
 			}
-		default:
-			if opaque(m) {
-				e.cb = cbTC16
-			} else {
-				e.cb = cbTCA16
+		} else {
+			switch m.ColorModel() {
+			case color.GrayModel:
+				e.cb = cbG8
+			case color.Gray16Model:
+				e.cb = cbG16
+			case color.RGBAModel, color.NRGBAModel, color.AlphaModel:
+				if opaque(m) {
+					e.cb = cbTC8
+				} else {
+					e.cb = cbTCA8
+				}
+			default:
+				if opaque(m) {
+					e.cb = cbTC16
+				} else {
+					e.cb = cbTCA16
+				}
 			}
 		}
 	}
 
 	_, e.err = io.WriteString(w, pngHeader)
-	e.writeIHDR()
+	switch deferred {
+	case true:
+		e.writeChunk(di.ihdr[:len(di.ihdr)-4], "IHDR")
+	case false:
+		e.writeIHDR()
+	}
 
 	// If we have a gAMA chunk then it needs to be written now.
 	if metadata != nil {
@@ -1003,12 +1020,29 @@ func (enc *Encoder) EncodeExtended(ctx context.Context, w io.Writer, m image.Ima
 		}
 	}
 
-	if pal != nil {
-		e.writePLTEAndTRNS(pal)
+	switch deferred {
+	case true:
+		if di.plte != nil {
+			e.writeChunk(di.plte[:len(di.plte)-4], "PLTE")
+		}
+		if di.trns != nil {
+			e.writeChunk(di.trns[:len(di.trns)-4], "tRNS")
+		}
+	case false:
+		if pal != nil {
+			e.writePLTEAndTRNS(pal)
+		}
 	}
 	e.maybeWriteHIST(metadata)
 
-	e.writeIDATs()
+	switch deferred {
+	case true:
+		if di.idat != nil {
+			e.writeChunk(di.idat[:len(di.idat)-4], "IDAT")
+		}
+	case false:
+		e.writeIDATs()
+	}
 
 	e.writeIEND()
 	return e.err

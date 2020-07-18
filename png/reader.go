@@ -1199,10 +1199,11 @@ func DecodeExtended(ctx context.Context, r io.Reader, opts ...image.ReadOption) 
 		if err != nil {
 			return nil, nil, err
 		}
-		_, err = d.metadata.XMP(ctx, opts...)
-		if err != nil {
-			return nil, nil, err
-		}
+		// Right now we don't decode XMP by default because we can't
+		// _, err = d.metadata.XMP(ctx, opts...)
+		// if err != nil {
+		// 	return nil, nil, err
+		// }
 		_, err = d.metadata.ICC(ctx, opts...)
 		if err != nil {
 			return nil, nil, err

@@ -530,7 +530,7 @@ func TestDeferImage(t *testing.T) {
 		defer f.Close()
 		di, _, err := DecodeExtended(ctx, f, image.DataDecodeOptions{
 			DecodeImage:    image.DeferData,
-			DecodeMetadata: image.DeferData,
+			DecodeMetadata: image.DecodeData,
 		})
 		if err != nil {
 			t.Fatalf("Deferred decode failed: %v", err)
